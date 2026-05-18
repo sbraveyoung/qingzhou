@@ -94,9 +94,10 @@ public final class VPNTunnelManager {
 
     /// 把当前选中节点的配置写入 system preferences。
     ///
-    /// 主 App 只传 share link 字符串 + 代理模式 —— share link → 完整 xray JSON 的
-    /// 转换由 Extension 内部做。这样主 App 不需要 link LibXray.xcframework，启动时
-    /// 不会被 85 MB Go runtime 拖慢。
+    /// 把 Node 本身（JSON 编码）+ share link 都塞进 providerConfiguration。Extension
+    /// 优先用 Node 跑纯 Swift 的 NodeConverter（XrayConfig 模块），share link 作 fallback。
+    /// 主 App 既不 link LibXray.xcframework 也不 link XrayConfig —— 启动时不会被任何额外
+    /// 动态库拖慢。
     public func configure(
         node: Node,
         mode: ProxyMode,
@@ -110,11 +111,27 @@ public final class VPNTunnelManager {
         proto.providerBundleIdentifier = providerBundleId
         // serverAddress 只是给系统设置 UI 用的 display 字段，不参与真实连接
         proto.serverAddress = node.host
+
+        // 把 Node 序列化成 JSON 字符串 —— providerConfiguration 是 plist 字典，不接受
+        // 任意 Swift Codable。先 encode 到 Data 再转 String。
+        let nodeJSON: String
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(node)
+            nodeJSON = String(data: data, encoding: .utf8) ?? ""
+        } catch {
+            // 极少触发 —— Node 的字段都是基础类型。真出错就只走 shareLink 路。
+            logger?.warn("encode node failed: \(error); falling back to shareLink only", category: "tunnel")
+            nodeJSON = ""
+        }
+
         // 把启动信息塞进 providerConfiguration —— 系统保存在 VPN preferences 里，
         // Extension 启动时通过 protocolConfiguration.providerConfiguration 读出来。
         // 不再需要 App Group 共享存储，因此不会触发「访问其他 App 数据」隐私弹窗。
         proto.providerConfiguration = [
-            "shareLink": shareLink,
+            "nodeJSON": nodeJSON,
+            "shareLink": shareLink,  // fallback 通道
             "nodeId": node.id.uuidString,
             "nodeName": node.name,
             "proxyMode": mode.rawValue

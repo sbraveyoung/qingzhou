@@ -46,19 +46,22 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     ) {
         os_log("startTunnel begin", log: log, type: .default)
 
-        // 1) 从 providerConfiguration 读 share link + proxyMode
-        //    主 App 只传 share link 字符串（NodeEncoder 纯 Swift 生成），
-        //    libXray 的 ConvertShareLinksToXrayJson + XrayConfigComposer 都在这边跑 ——
-        //    主 App 因此完全不 link LibXray.xcframework，启动时省下 1–3 秒 dyld 加载。
+        // 1) 从 providerConfiguration 读启动信息
+        //    新路径：nodeJSON → 纯 Swift NodeConverter（XrayConfig 模块）→ xray outbounds
+        //    fallback：shareLink → libXray.ConvertShareLinksToXrayJson
+        //    fallback 留着是为了万一 NodeConverter 有覆盖不到的字段映射，至少能切回原路径，
+        //    稳定一段时间后会移除 libXray.convertShareLinks 调用。
         let providerConfig = (self.protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
-        guard let shareLink = providerConfig?["shareLink"] as? String, !shareLink.isEmpty else {
+        let nodeJSON = providerConfig?["nodeJSON"] as? String ?? ""
+        let shareLink = providerConfig?["shareLink"] as? String ?? ""
+        guard !nodeJSON.isEmpty || !shareLink.isEmpty else {
             let err = NSError(
                 domain: "com.sbraveyoung.vpn.tunnel",
                 code: 1001,
                 userInfo: [NSLocalizedDescriptionKey:
-                    "未在 providerConfiguration 中找到 shareLink。主 App 需要先用 VPNTunnelManager.configure(...) 保存配置。"]
+                    "providerConfiguration 里既没有 nodeJSON 也没有 shareLink。主 App 需要先用 VPNTunnelManager.configure(...) 保存配置。"]
             )
-            os_log("missing shareLink in providerConfiguration", log: log, type: .error)
+            os_log("missing nodeJSON/shareLink in providerConfiguration", log: log, type: .error)
             completionHandler(err)
             return
         }
@@ -68,10 +71,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         os_log("starting tunnel for node: %{public}@ mode=%{public}@",
                log: log, type: .default, nodeName, mode.rawValue)
 
-        // 在 Extension 里做 share link → 完整 xray JSON 的两步转换。
+        // 转换 Node → outbounds JSON
         let xrayJSON: String
         do {
-            let outboundsJSON = try XrayCore.convertShareLinks(shareLink)
+            let outboundsJSON = try resolveOutboundsJSON(nodeJSON: nodeJSON, shareLink: shareLink)
             xrayJSON = try XrayConfigComposer.compose(outboundsJSON: outboundsJSON, mode: mode)
         } catch {
             os_log("share link → xray config 转换失败: %{public}@",
@@ -163,6 +166,43 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             self.tearDownBridge()
             completionHandler(error)
         }
+    }
+
+    // MARK: - Node → xray outbounds JSON 双路径
+
+    /// 优先走纯 Swift `NodeConverter`，失败时（解码 / 转换出错或本来就没 nodeJSON）退回 libXray。
+    /// 当前是 S3 Phase 2 的过渡期 —— 稳定一段时间后会移除 libXray 那条路径。
+    private func resolveOutboundsJSON(nodeJSON: String, shareLink: String) throws -> String {
+        // Path A: Swift NodeConverter
+        if !nodeJSON.isEmpty,
+           let data = nodeJSON.data(using: .utf8) {
+            do {
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                let node = try decoder.decode(Node.self, from: data)
+                let result = try NodeConverter.toOutboundsJSON(node)
+                os_log("✅ outbounds via Swift NodeConverter (protocol=%{public}@)",
+                       log: log, type: .default, node.protocolType.rawValue)
+                return result
+            } catch {
+                os_log("⚠️ NodeConverter 失败 (%{public}@)，退回 libXray.convertShareLinks",
+                       log: log, type: .error, error.localizedDescription)
+                // fall through
+            }
+        }
+        // Path B: libXray.convertShareLinks
+        if !shareLink.isEmpty {
+            let result = try XrayCore.convertShareLinks(shareLink)
+            os_log("✅ outbounds via libXray.convertShareLinks (fallback)",
+                   log: log, type: .default)
+            return result
+        }
+        throw NSError(
+            domain: "com.sbraveyoung.vpn.tunnel",
+            code: 1004,
+            userInfo: [NSLocalizedDescriptionKey:
+                "两条路径都失败：nodeJSON 解析失败且 shareLink 为空"]
+        )
     }
 
     // MARK: - socketpair TUN bridge (iOS 26 必备)

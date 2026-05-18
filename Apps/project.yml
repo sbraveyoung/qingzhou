@@ -1,0 +1,219 @@
+# XcodeGen 配置。修改后跑 `xcodegen generate` 重新生成 VPN.xcodeproj。
+# 注意：生成的 .xcodeproj 不要 commit，本仓库 .gitignore 已经忽略。
+name: VPN
+options:
+  bundleIdPrefix: com.sbraveyoung
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "17.0"
+    macOS: "14.0"
+  developmentLanguage: zh-Hans
+  generateEmptyDirectories: true
+
+# 本地 SPM 包引用 —— 路径是相对于 project.yml 所在目录
+packages:
+  VPN:
+    path: ..
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # 调试期间用自动签名 + 你自己的 Personal Team
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  VPN-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: iOS/Sources
+      - path: iOS/Resources
+    info:
+      path: iOS/Info.plist
+      properties:
+        CFBundleDisplayName: VPN
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSCameraUsageDescription: 扫描二维码以快速添加节点或订阅
+        UILaunchScreen:
+          UIColorName: ""
+        UIRequiredDeviceCapabilities:
+          - arm64
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sbraveyoung.vpn.ios
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        DEVELOPMENT_TEAM: UK7MME38H9
+    entitlements:
+      path: iOS/Resources/VPN-iOS.entitlements
+      properties:
+        # 让主 App 能管理 Personal VPN 配置 —— 启停 Packet Tunnel Extension 必需
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider
+    dependencies:
+      - package: VPN
+        product: VPNApp
+      - package: VPN
+        product: VPNCore
+      - package: VPN
+        product: VPNLogging
+      # 主 App 不再 link XrayCore —— 那会拖进 LibXray.xcframework（85 MB Go runtime），
+      # 让 dyld 在启动时多花 1–3 秒。share link → xray 配置的转换挪到了 Extension。
+      # PacketTunnel Extension：嵌入到 App，等 entitlement 批复后真机才能跑
+      - target: VPN-Tunnel-iOS
+        embed: true
+        codeSign: true
+
+  VPN-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - path: macOS/Sources
+      - path: macOS/Resources
+    info:
+      path: macOS/Info.plist
+      properties:
+        CFBundleDisplayName: VPN
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        # 不要在 dock 显示，只在状态栏 —— 想要常规窗口模式把这行删掉
+        # LSUIElement: true
+        NSHumanReadableCopyright: Copyright © 2026
+    entitlements:
+      path: macOS/Resources/VPN.entitlements
+      properties:
+        # App Sandbox 上架必须 true，调试期想绕过沙箱限制可改 false
+        com.apple.security.app-sandbox: true
+        # 出站网络（订阅刷新、测速等都需要）
+        com.apple.security.network.client: true
+        # 让主 App 能管理 Personal VPN 配置 —— 启停 Packet Tunnel Extension 必需
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sbraveyoung.vpn.mac
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        DEVELOPMENT_TEAM: UK7MME38H9
+    dependencies:
+      - package: VPN
+        product: VPNApp
+      - package: VPN
+        product: VPNCore
+      - package: VPN
+        product: VPNLogging
+      # 主 App 不再 link XrayCore —— 那会拖进 LibXray.xcframework（85 MB Go runtime），
+      # 让 dyld 在启动时多花 1–3 秒。share link → xray 配置的转换挪到了 Extension。
+      # PacketTunnel Extension：嵌入到 App，等 entitlement 批复后才能签真机
+      - target: VPN-Tunnel-macOS
+        embed: true
+        codeSign: true
+
+  # ===========================================================================
+  # PacketTunnel Extension targets（阶段 2）
+  # 共享同一份 Tunnel-Shared/PacketTunnelProvider.swift；现在是 stub，
+  # 等接入 sing-box.xcframework 后改为真实现。
+  # 这两个 target 当前能编过；要在真机上签名运行，必须先拿到 Apple 的
+  # `packet-tunnel-provider` entitlement 批复。
+  # ===========================================================================
+  VPN-Tunnel-iOS:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Tunnel-Shared
+      - path: Tunnel-iOS
+    info:
+      path: Tunnel-iOS/Info.plist
+      properties:
+        CFBundleDisplayName: VPN Tunnel
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+    entitlements:
+      path: Tunnel-iOS/Tunnel.entitlements
+      properties:
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sbraveyoung.vpn.ios.tunnel
+        DEVELOPMENT_TEAM: UK7MME38H9
+        SWIFT_VERSION: "6.0"
+    dependencies:
+      - package: VPN
+        product: XrayCore
+      # Extension 里要用 VPNCore.ProxyMode（share link → xray 配置转换在这里做）。
+      - package: VPN
+        product: VPNCore
+
+  VPN-Tunnel-macOS:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Tunnel-Shared
+      - path: Tunnel-macOS
+    info:
+      path: Tunnel-macOS/Info.plist
+      properties:
+        CFBundleDisplayName: VPN Tunnel
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+    entitlements:
+      path: Tunnel-macOS/Tunnel.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+        com.apple.developer.networking.networkextension:
+          - packet-tunnel-provider
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sbraveyoung.vpn.mac.tunnel
+        DEVELOPMENT_TEAM: UK7MME38H9
+        SWIFT_VERSION: "6.0"
+        ENABLE_HARDENED_RUNTIME: YES
+    dependencies:
+      - package: VPN
+        product: XrayCore
+      # Extension 里要用 VPNCore.ProxyMode（share link → xray 配置转换在这里做）。
+      - package: VPN
+        product: VPNCore
+
+schemes:
+  VPN-iOS:
+    build:
+      targets:
+        VPN-iOS: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
+    archive:
+      config: Release
+  VPN-macOS:
+    build:
+      targets:
+        VPN-macOS: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
+    archive:
+      config: Release

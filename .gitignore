@@ -1,0 +1,32 @@
+## Swift / SPM
+.build/
+.swiftpm/
+Packages/
+Package.resolved
+*.xcodeproj/
+*.xcworkspace/
+
+## Xcode
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.moved-aside
+
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+## Coverage / profiling
+*.profraw
+*.profdata
+*.xcresult
+
+## Binary frameworks (built by scripts/build-libxray.sh, ~380MB, can be regenerated)
+Frameworks/LibXray.xcframework/
+
+## Editor
+.vscode/
+.idea/
+*.swp
+*~

@@ -1,0 +1,62 @@
+// 主 App 和 PacketTunnel Extension 之间共享的最小存储。
+//
+// 设计：只共享 Extension **启动时必需**的东西 —— 当前节点对应的 xray JSON 配置。
+// 主 App 在调用 NETunnelProviderManager.startVPNTunnel() 之前先把配置写进来；
+// Extension 的 startTunnel(options:) 里读出来。
+//
+// 不依赖 VPNApp / VPNCore 任何业务类型，纯 String/Data 跨进程。XrayCore 是
+// Extension target 唯一需要的 SPM 依赖，把这个 helper 也塞进来正合适。
+
+import Foundation
+
+public enum TunnelAppGroup {
+    /// App Group 标识符。和 entitlements 里的 `com.apple.security.application-groups` 必须一致。
+    /// 如果你 fork 项目改了 group id，这里和 entitlements 都要改。
+    public static let groupIdentifier: String = "group.com.sbraveyoung.vpn"
+
+    /// AppGroup 容器根目录。entitlement 未配置或 sandbox 拒绝时为 nil。
+    public static var containerURL: URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupIdentifier)
+    }
+
+    // MARK: - xray JSON 配置
+
+    private static var configURL: URL? {
+        containerURL?.appendingPathComponent("xray-config.json")
+    }
+
+    /// 主 App 调：把当前生效的 xray JSON 写到共享容器。
+    /// - Returns: true 表示写入成功；entitlement 不全或写入失败返回 false。
+    @discardableResult
+    public static func writeXrayConfig(_ json: String) -> Bool {
+        guard let url = configURL else { return false }
+        do {
+            try json.write(to: url, atomically: true, encoding: .utf8)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Extension 调：读出当前应启动的 xray JSON 配置。
+    public static func readXrayConfig() -> String? {
+        guard let url = configURL else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: - xray 工作目录（geo 文件、mph cache 等）
+
+    /// xray 内部用的工作目录。geosite.dat / geoip.dat / mph.cache 都放在这。
+    /// Extension 启动时调，目录不存在时自动创建。
+    public static func ensureWorkingDirectory() -> URL? {
+        guard let base = containerURL else { return nil }
+        let dir = base.appendingPathComponent("xray-data", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// Mph cache 文件路径（xray-core 用于规则匹配加速）。
+    public static func mphCachePath() -> String? {
+        ensureWorkingDirectory()?.appendingPathComponent("mph.cache").path
+    }
+}

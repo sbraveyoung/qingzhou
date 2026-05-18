@@ -1,0 +1,383 @@
+import SwiftUI
+import VPNCore
+import VPNSpeedTest
+
+public struct HomeView: View {
+    @Bindable var state: AppState
+    @State private var isRefreshingIP = false
+    @State private var isTestingSpeed = false
+    @State private var singleTesting: Set<SpeedTestTarget> = []
+
+    public init(state: AppState) {
+        self.state = state
+    }
+
+    public var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                vpnSwitchCard
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 280), spacing: 14)],
+                    spacing: 14
+                ) {
+                    currentNodeCard
+                    subscriptionCard
+                    networkCard
+                    trafficCard
+                    speedTestCard
+                    systemCard
+                }
+            }
+            .padding()
+        }
+        .navigationTitle("首页")
+        // 注意：之前在这里 .task { await firstLoad() } 会和 app entry 的 .task 重复触发
+        // refreshRemoteRules / refreshPublicIPInfo，启动时争抢主线程导致 UI 卡顿。
+        // 现在统一由 app entry 调度，HomeView 只读 state。
+        .alert(
+            "VPN 启动失败",
+            isPresented: Binding(
+                get: { state.tunnelError != nil },
+                set: { if !$0 { state.tunnelError = nil } }
+            ),
+            presenting: state.tunnelError
+        ) { _ in
+            Button("好") { state.tunnelError = nil }
+        } message: { msg in
+            Text(msg)
+        }
+    }
+
+    // MARK: - 卡片
+
+    private var vpnSwitchCard: some View {
+        Card {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(state.isVPNRunning ? Color.green.opacity(0.18) : Color.secondary.opacity(0.14))
+                        .frame(width: 56, height: 56)
+                    Image(systemName: state.isVPNRunning ? "bolt.fill" : "bolt.slash.fill")
+                        .font(.title)
+                        .foregroundStyle(state.isVPNRunning ? .green : .secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(state.isVPNRunning ? "VPN 已连接" : "VPN 未连接")
+                        .font(.title3.bold())
+                    if let n = state.currentNode {
+                        Text("\(n.name) · \(n.protocolType.rawValue.uppercased())")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("未选择节点").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Toggle("", isOn: state.vpnRunningBinding)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+
+            Divider().padding(.vertical, 6)
+
+            HStack {
+                Text("代理模式").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Picker("", selection: state.setting(\.proxyMode)) {
+                    ForEach(ProxyMode.allCases, id: \.self) { m in
+                        Text(label(for: m)).tag(m)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 280)
+            }
+        }
+    }
+
+    private var currentNodeCard: some View {
+        Card(title: "当前节点", systemImage: "server.rack") {
+            if let node = state.currentNode {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(node.name).font(.headline)
+                    Text("\(node.protocolType.rawValue.uppercased()) · \(node.host):\(node.port)")
+                        .font(.caption.monospaced()).foregroundStyle(.secondary)
+                    HStack {
+                        latencyChip(node.lastLatencyMs)
+                        if let t = node.lastTestedAt {
+                            Text("测于 \(t.formatted(.relative(presentation: .named)))")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } else {
+                emptyCard(icon: "questionmark.circle", text: "未选择节点", cta: "去节点页选择")
+            }
+        }
+    }
+
+    private var subscriptionCard: some View {
+        Card(title: "订阅", systemImage: "tray.full") {
+            if state.subscriptions.isEmpty {
+                emptyCard(icon: "tray", text: "暂无订阅", cta: "去订阅页添加")
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(state.subscriptions.prefix(2)) { sub in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(sub.name).font(.subheadline.bold())
+                            HStack {
+                                Text("节点 \(sub.nodeCount)").font(.caption2).foregroundStyle(.secondary)
+                                if let upd = sub.lastUpdatedAt {
+                                    Text("· 更新于 \(upd.formatted(.relative(presentation: .named)))")
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
+                            if let used = sub.usedBytes, let total = sub.totalBytes {
+                                ProgressView(value: Double(used), total: Double(max(total, 1)))
+                                Text("\(ByteFormatter.format(used)) / \(ByteFormatter.format(total))")
+                                    .font(.caption2.monospaced())
+                            }
+                            if let exp = sub.expiresAt {
+                                Text("到期：\(exp.formatted(date: .abbreviated, time: .omitted))")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    if state.subscriptions.count > 2 {
+                        Text("还有 \(state.subscriptions.count - 2) 条订阅…").font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private var networkCard: some View {
+        Card(title: "公网 IP", systemImage: "globe") {
+            if let info = state.publicIPInfo {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(info.ip).font(.headline.monospaced())
+                    if let country = info.country {
+                        Text([info.city, info.region, country].compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let isp = info.isp {
+                        Text(isp).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Text("更新于 \(info.fetchedAt.formatted(.relative(presentation: .named)))")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            } else {
+                Text(isRefreshingIP ? "查询中…" : "尚未获取").foregroundStyle(.secondary)
+            }
+            HStack {
+                Spacer()
+                Button {
+                    Task {
+                        isRefreshingIP = true
+                        await state.refreshPublicIPInfo()
+                        isRefreshingIP = false
+                    }
+                } label: {
+                    Label("刷新", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .disabled(isRefreshingIP)
+            }
+        }
+    }
+
+    private var trafficCard: some View {
+        Card(title: "流量统计", systemImage: "chart.bar") {
+            let totalUp = state.connections.reduce(0) { $0 + $1.uploadBytes }
+            let totalDown = state.connections.reduce(0) { $0 + $1.downloadBytes }
+            let active = state.connections.filter { $0.isActive }.count
+            let curUp = state.connections.filter { $0.isActive }.reduce(0) { $0 + $1.uploadSpeedBps }
+            let curDown = state.connections.filter { $0.isActive }.reduce(0) { $0 + $1.downloadSpeedBps }
+            VStack(alignment: .leading, spacing: 8) {
+                statRow("活跃连接", value: "\(active)")
+                statRow("总上行", value: ByteFormatter.format(totalUp))
+                statRow("总下行", value: ByteFormatter.format(totalDown))
+                statRow("当前速率", value: "↑ \(ByteFormatter.format(curUp))/s · ↓ \(ByteFormatter.format(curDown))/s")
+            }
+        }
+    }
+
+    private var speedTestCard: some View {
+        Card(title: "网站测试", systemImage: "speedometer") {
+            // 把上次的结果按 URL → result 索引一下，方便和全部 target 列表合并
+            let byURL: [URL: LatencyResult] = Dictionary(
+                uniqueKeysWithValues: (state.lastSpeedTestReport?.results ?? []).map { ($0.url, $0) }
+            )
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(SpeedTestTarget.allCases, id: \.self) { target in
+                    HStack {
+                        Text(target.displayName).font(.caption)
+                        Spacer()
+                        if singleTesting.contains(target) {
+                            ProgressView().controlSize(.small)
+                        } else if let r = byURL[target.url], let ms = r.latencyMs {
+                            Text("\(ms) ms").font(.caption.monospaced())
+                                .foregroundStyle(color(for: ms))
+                        } else if let r = byURL[target.url], r.latencyMs == nil {
+                            Text("失败").font(.caption.monospaced()).foregroundStyle(.red)
+                        } else {
+                            Text("—").font(.caption.monospaced()).foregroundStyle(.secondary)
+                        }
+                        Button {
+                            Task { await runSingle(target) }
+                        } label: {
+                            Image(systemName: "play.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(singleTesting.contains(target) || isTestingSpeed)
+                        .help("测试 \(target.displayName)")
+                    }
+                }
+            }
+            HStack {
+                Spacer()
+                Button {
+                    Task { await runAll() }
+                } label: {
+                    if isTestingSpeed {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("一键全部测试", systemImage: "play.fill")
+                    }
+                }
+                .buttonStyle(.borderless)
+                .disabled(isTestingSpeed)
+            }
+        }
+    }
+
+    private func runAll() async {
+        isTestingSpeed = true
+        state.lastSpeedTestReport = await state.speedTestRunner.runBuiltInTargets()
+        isTestingSpeed = false
+    }
+
+    /// 测单个 target，结果合并到 `state.lastSpeedTestReport` 里。
+    private func runSingle(_ target: SpeedTestTarget) async {
+        singleTesting.insert(target)
+        defer { singleTesting.remove(target) }
+        let report = await state.speedTestRunner.run(urls: [target.url])
+        guard let result = report.results.first else { return }
+        // 合并到 lastSpeedTestReport
+        var existing = state.lastSpeedTestReport?.results ?? []
+        existing.removeAll(where: { $0.url == result.url })
+        existing.append(result)
+        state.lastSpeedTestReport = SpeedTestReport(
+            startedAt: state.lastSpeedTestReport?.startedAt ?? Date(),
+            finishedAt: Date(),
+            results: existing
+        )
+    }
+
+    private var systemCard: some View {
+        Card(title: "系统信息", systemImage: "cpu") {
+            VStack(alignment: .leading, spacing: 6) {
+                statRow("App 版本", value: appVersion)
+                if let xv = state.coreVersion, !xv.isEmpty {
+                    statRow("xray-core", value: xv)
+                }
+                #if os(macOS)
+                statRow("平台", value: "macOS")
+                #else
+                statRow("平台", value: "iOS")
+                #endif
+                statRow("HTTP / SOCKS", value: "\(state.settings.httpPort) / \(state.settings.socksPort)")
+                statRow("日志级别", value: state.settings.logLevel)
+                statRow("规则数", value: "\(state.customRules.count + state.remoteRules.count)")
+            }
+        }
+    }
+
+    private var appVersion: String {
+        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return "\(v) (\(b))"
+    }
+
+    // MARK: - helpers
+
+    private func latencyChip(_ ms: Int?) -> some View {
+        Group {
+            if let ms {
+                Text("\(ms) ms")
+                    .font(.caption.monospaced())
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(color(for: ms).opacity(0.18))
+                    .foregroundStyle(color(for: ms))
+                    .clipShape(Capsule())
+            } else {
+                Text("未测速")
+                    .font(.caption.monospaced())
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Color.secondary.opacity(0.18))
+                    .clipShape(Capsule())
+            }
+        }
+    }
+
+    private func color(for ms: Int) -> Color {
+        if ms < 200 { return .green }
+        if ms < 500 { return .orange }
+        return .red
+    }
+
+    private func statRow(_ title: String, value: String) -> some View {
+        HStack {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).font(.caption.monospaced())
+        }
+    }
+
+    private func emptyCard(icon: String, text: String, cta: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: icon).foregroundStyle(.secondary)
+                Text(text).foregroundStyle(.secondary)
+            }
+            Text(cta).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private func label(for mode: ProxyMode) -> String {
+        switch mode {
+        case .global: return "全局"
+        case .rule:   return "规则"
+        case .direct: return "直连"
+        }
+    }
+}
+
+/// 通用卡片容器：圆角、淡背景、可选 title + icon。
+struct Card<Content: View>: View {
+    var title: String?
+    var systemImage: String?
+    @ViewBuilder var content: () -> Content
+
+    init(title: String? = nil, systemImage: String? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.systemImage = systemImage
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let title {
+                HStack(spacing: 6) {
+                    if let systemImage {
+                        Image(systemName: systemImage).foregroundStyle(.tint)
+                    }
+                    Text(title).font(.headline)
+                }
+            }
+            content()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}

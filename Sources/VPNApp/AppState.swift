@@ -1,0 +1,467 @@
+import Foundation
+import Observation
+// 不全量 `import SwiftUI` —— SwiftUI 里也有一个叫 Settings 的类型（用于 Settings scene），
+// 会和我们的 VPNCore.Settings 冲突。只 import 需要的 Binding 类型。
+import struct SwiftUI.Binding
+import VPNCore
+import VPNProtocols
+import VPNSubscription
+import VPNRules
+import VPNSpeedTest
+import VPNLogging
+
+/// 应用顶层状态容器。UI 通过 @Bindable 直接读 / 写；所有写入都会自动持久化。
+///
+/// 设计要点：
+/// - `@MainActor` 限定：所有读 / 写都在主线程，避免后台线程改 UI 状态导致 SwiftUI 抱怨。
+/// - 服务（Logger / SubscriptionFetcher / NodeSelector）通过初始化注入，便于测试替换。
+/// - 调度器（auto-select / auto-refresh / sample-connections）在 `start()` 里起 Task；
+///   `stop()` 时取消。生命周期由 app 入口管理。
+@MainActor
+@Observable
+public final class AppState {
+    public var subscriptions: [Subscription] = []
+    public var nodes: [Node] = []
+    public var currentNodeId: UUID?
+    public var customRules: [Rule] = []
+    public var remoteRules: [Rule] = []
+    public var connections: [Connection] = []
+    public var settings: Settings = Settings()
+    public var lastSpeedTestReport: SpeedTestReport?
+    public var isVPNRunning: Bool = false
+    /// VPN 启停最近一次错误（拿不到 entitlement / 配置失败等）。UI 用 alert 展示。
+    public var tunnelError: String?
+    /// 当前 xray-core 版本。由 app 入口注入（VPNApp 库本身不依赖 XrayCore，避免拖进 380MB xcframework）。
+    public var coreVersion: String?
+
+    /// 公网 IP / 地理信息，由 NetworkInfoService 异步填充。
+    public var publicIPInfo: PublicIPInfo?
+    /// 远程规则源最近一次拉取时间 / 错误。
+    public var remoteRulesStatus: RemoteFetchStatus = .idle
+    /// 订阅最近一次刷新错误（按 id 索引），仅保留最近一条错误信息。
+    public var subscriptionErrors: [UUID: String] = [:]
+
+    public let logger: Logger
+    public let subscriptionFetcher: SubscriptionFetcher
+    public let nodeSelector: NodeSelector
+    public let speedTestRunner: SpeedTestRunner
+    public let persistence: Persistence
+    public let tunnelManager: VPNTunnelManager
+
+    private var schedulerTask: Task<Void, Never>?
+    private var sampleConnectionsTask: Task<Void, Never>?
+
+    public init(
+        logger: Logger = Logger(),
+        persistence: Persistence = Persistence(directory: Persistence.defaultDirectory()),
+        subscriptionFetcher: SubscriptionFetcher? = nil,
+        nodeSelector: NodeSelector? = nil,
+        speedTestRunner: SpeedTestRunner? = nil,
+        tunnelManager: VPNTunnelManager? = nil
+    ) {
+        self.logger = logger
+        self.persistence = persistence
+        self.subscriptionFetcher = subscriptionFetcher ?? SubscriptionFetcher(logger: logger)
+        self.nodeSelector = nodeSelector ?? NodeSelector(logger: logger)
+        self.speedTestRunner = speedTestRunner ?? SpeedTestRunner(logger: logger)
+        self.tunnelManager = tunnelManager ?? VPNTunnelManager(logger: logger)
+
+        let snapshot = persistence.loadSnapshot()
+        self.subscriptions = snapshot.subscriptions
+        self.nodes = snapshot.nodes
+        self.customRules = snapshot.customRules
+        self.settings = snapshot.settings
+        self.currentNodeId = snapshot.currentNodeId
+        logger.info(
+            "AppState restored: \(subscriptions.count) subs, \(nodes.count) nodes, \(customRules.count) custom rules",
+            category: "app"
+        )
+        logger.setMinimumLevel(LogLevel(rawValue: settings.logLevel) ?? .info)
+    }
+
+    // MARK: - 持久化
+
+    /// 把当前状态序列化落盘。异步执行 —— 主线程立即返回，编码 + 写盘在后台 utility 队列。
+    func persist() {
+        let snapshot = Persistence.Snapshot(
+            subscriptions: subscriptions,
+            nodes: nodes,
+            customRules: customRules,
+            settings: settings,
+            currentNodeId: currentNodeId
+        )
+        persistence.saveSnapshotAsync(snapshot)
+    }
+
+    /// 给 SwiftUI 用的 `Binding` 包装：每次 set 都自动 persist，并同步 logger 等副作用。
+    public func setting<T>(_ keyPath: WritableKeyPath<Settings, T>) -> Binding<T> where T: Equatable {
+        Binding(
+            get: { self.settings[keyPath: keyPath] },
+            set: { newValue in
+                guard self.settings[keyPath: keyPath] != newValue else { return }
+                self.settings[keyPath: keyPath] = newValue
+                self.applySettingsSideEffects()
+                self.persist()
+            }
+        )
+    }
+
+    /// settings 任意字段变化后调用：把字段的「执行性」副作用真正落地。
+    /// 当前涉及：logger 级别。未来可加：macOS 系统代理端口变化时重新应用。
+    private func applySettingsSideEffects() {
+        if let lvl = LogLevel(rawValue: settings.logLevel) {
+            logger.setMinimumLevel(lvl)
+        }
+    }
+
+    // MARK: - 节点
+
+    public var sortedNodes: [Node] { nodes.sorted(by: settings.nodeSortOrder) }
+    public var currentNode: Node? { nodes.first { $0.id == currentNodeId } }
+
+    public func toggleExclusion(_ node: Node) {
+        guard let idx = nodes.firstIndex(where: { $0.id == node.id }) else { return }
+        nodes[idx].isExcluded.toggle()
+        logger.info("Toggled exclusion for \(nodes[idx].name) → \(nodes[idx].isExcluded)", category: "app")
+        if nodes[idx].isExcluded && currentNodeId == node.id {
+            currentNodeId = nil
+        }
+        persist()
+    }
+
+    public func select(_ node: Node) {
+        guard nodes.contains(where: { $0.id == node.id }) else { return }
+        currentNodeId = node.id
+        logger.info("Selected node \(node.name)", category: "app")
+        persist()
+    }
+
+    public func addNode(fromURL urlString: String) throws {
+        let node = try ProxyURLParser.parse(urlString)
+        merge(node: node)
+        logger.info("Added node \(node.name)", category: "app")
+        persist()
+    }
+
+    /// 批量解析输入（多行链接 **或** Clash YAML），成功的入库，失败的回传。
+    @discardableResult
+    public func addNodes(fromText text: String) -> (added: Int, errors: [(String, Error)]) {
+        // Clash YAML 优先识别 —— 看到 `proxies:` 顶层 key 就走 YAML 解析路径
+        if ClashConfigParser.isClashConfig(text) {
+            do {
+                let (parsed, errs) = try ClashConfigParser.parse(text)
+                for node in parsed { merge(node: node) }
+                if !parsed.isEmpty {
+                    logger.info("Imported \(parsed.count) Clash nodes", category: "app")
+                    persist()
+                }
+                let errors = errs.map { ($0.name, NSError(
+                    domain: "ClashConfig", code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: $0.reason]) as Error) }
+                return (parsed.count, errors)
+            } catch {
+                logger.warn("Clash YAML parse failed: \(error)", category: "app")
+                // 失败就退回到链接解析路径
+            }
+        }
+        let (parsed, errors) = ProxyURLParser.parseBatch(text)
+        for node in parsed { merge(node: node) }
+        if !parsed.isEmpty {
+            logger.info("Manually added \(parsed.count) nodes", category: "app")
+            persist()
+        }
+        return (parsed.count, errors)
+    }
+
+    /// 节点入库：同身份指纹更新，否则追加。不写日志、不 persist —— 调用方决定。
+    private func merge(node: Node) {
+        if let idx = nodes.firstIndex(where: { $0.identityFingerprint == node.identityFingerprint }) {
+            var existing = nodes[idx]
+            existing.name = node.name
+            existing.parameters = node.parameters
+            nodes[idx] = existing
+        } else {
+            nodes.append(node)
+        }
+    }
+
+    public func removeNode(_ node: Node) {
+        nodes.removeAll { $0.id == node.id }
+        if currentNodeId == node.id { currentNodeId = nil }
+        persist()
+    }
+
+    // MARK: - VPN 隧道
+
+    /// 给 UI Toggle 用的 Binding：set 时异步启停 tunnel，并把 isVPNRunning 同步成实际状态。
+    public var vpnRunningBinding: Binding<Bool> {
+        Binding(
+            get: { self.isVPNRunning },
+            set: { newValue in
+                Task { @MainActor in
+                    if newValue {
+                        await self.startTunnel()
+                    } else {
+                        await self.stopTunnel()
+                    }
+                }
+            }
+        )
+    }
+
+    /// 启动 tunnel。捕获所有错误写到 `tunnelError`，UI 弹 alert。
+    ///
+    /// 流程：
+    /// 1. 当前节点 → share link 字符串（via `NodeEncoder.shareLink`，纯 Swift）
+    /// 2. 把 share link + proxyMode 通过 providerConfiguration 传给 Extension
+    /// 3. Extension 自己跑 libXray.ConvertShareLinksToXrayJson + XrayConfigComposer.compose
+    ///    把 share link 展开成完整 xray 配置 —— 主 App 因此不需要 link LibXray.xcframework，
+    ///    启动不会被 85 MB Go runtime 拖慢。
+    public func startTunnel() async {
+        guard let node = currentNode else {
+            tunnelError = VPNTunnelManager.TunnelError.noCurrentNode.errorDescription
+            isVPNRunning = false
+            return
+        }
+
+        guard let shareLink = NodeEncoder.shareLink(node) else {
+            tunnelError = "无法把节点编码成分享链接"
+            isVPNRunning = false
+            return
+        }
+
+        do {
+            // description 带节点名，方便用户在「系统设置 → 网络 → VPN」里识别
+            try await tunnelManager.configure(
+                node: node,
+                mode: settings.proxyMode,
+                shareLink: shareLink,
+                description: "VPN · \(node.name)"
+            )
+            try await tunnelManager.start()
+            isVPNRunning = true
+            tunnelError = nil
+            logger.info("Tunnel started for node \(node.name)", category: "tunnel")
+        } catch {
+            isVPNRunning = false
+            tunnelError = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+            logger.error("Tunnel start failed: \(tunnelError ?? "?")", category: "tunnel")
+        }
+    }
+
+    public func stopTunnel() async {
+        tunnelManager.stop()
+        isVPNRunning = false
+    }
+
+    public func autoSelectBestNode() async {
+        guard !nodes.isEmpty else { return }
+        let measured = await nodeSelector.measure(nodes: nodes)
+        nodes = measured
+        if let best = await nodeSelector.pickBest(from: measured) {
+            currentNodeId = best.id
+            logger.info("Auto-selected \(best.name) (\(best.lastLatencyMs ?? -1)ms)", category: "app")
+        } else {
+            logger.warn("Auto-select found no viable node", category: "app")
+        }
+        persist()
+    }
+
+    public func measureAllNodes() async {
+        nodes = await nodeSelector.measure(nodes: nodes)
+        persist()
+    }
+
+    // MARK: - 订阅
+
+    public func addSubscription(name: String, url: URL) async {
+        let sub = Subscription(name: name.isEmpty ? (url.host ?? "Subscription") : name, url: url)
+        subscriptions.append(sub)
+        persist()
+        await refreshSubscription(sub)
+    }
+
+    public func refreshSubscription(_ subscription: Subscription) async {
+        do {
+            let (updated, payload) = try await subscriptionFetcher.refresh(subscription)
+            if let idx = subscriptions.firstIndex(where: { $0.id == subscription.id }) {
+                subscriptions[idx] = updated
+            } else {
+                subscriptions.append(updated)
+            }
+            merge(newNodes: payload.nodes, fromSubscription: updated.id)
+            subscriptionErrors[subscription.id] = nil
+            persist()
+        } catch {
+            subscriptionErrors[subscription.id] = "\(error)"
+            logger.error("Refresh subscription \(subscription.name) failed: \(error)", category: "subscription")
+        }
+    }
+
+    public func removeSubscription(_ subscription: Subscription) {
+        subscriptions.removeAll { $0.id == subscription.id }
+        nodes.removeAll { $0.subscriptionId == subscription.id }
+        if let cn = currentNode, cn.subscriptionId == subscription.id { currentNodeId = nil }
+        subscriptionErrors[subscription.id] = nil
+        persist()
+    }
+
+    public func merge(newNodes incoming: [Node], fromSubscription subId: UUID) {
+        let oldBySub = nodes.filter { $0.subscriptionId == subId }
+        let oldByFingerprint = Dictionary(uniqueKeysWithValues: oldBySub.map { ($0.identityFingerprint, $0) })
+
+        var preserved: [Node] = []
+        for n in incoming {
+            var merged = n
+            if let prev = oldByFingerprint[n.identityFingerprint] {
+                merged.id = prev.id
+                merged.isExcluded = prev.isExcluded
+                merged.lastLatencyMs = prev.lastLatencyMs
+                merged.lastTestedAt = prev.lastTestedAt
+            }
+            preserved.append(merged)
+        }
+        nodes.removeAll { $0.subscriptionId == subId }
+        nodes.append(contentsOf: preserved)
+    }
+
+    // MARK: - 规则
+
+    public func addCustomRule(_ rule: Rule) {
+        customRules.append(rule)
+        logger.info("Added custom rule \(rule.lineForm)", category: "rules")
+        persist()
+    }
+
+    public func removeCustomRule(_ rule: Rule) {
+        customRules.removeAll { $0.id == rule.id }
+        persist()
+    }
+
+    public func currentRuleEngine() -> RuleEngine {
+        RuleEngine(rules: customRules + remoteRules)
+    }
+
+    // MARK: - 调度器
+
+    /// 启动后台调度：根据设置定期跑自动择优 + 订阅刷新；同时启动示例连接产线（直到真隧道接入）。
+    public func startSchedulers() {
+        stopSchedulers()
+        schedulerTask = Task { @MainActor [weak self] in
+            await self?.schedulerLoop()
+        }
+        if connections.isEmpty {
+            sampleConnectionsTask = Task { @MainActor [weak self] in
+                await self?.sampleConnectionsLoop()
+            }
+        }
+    }
+
+    public func stopSchedulers() {
+        schedulerTask?.cancel()
+        schedulerTask = nil
+        sampleConnectionsTask?.cancel()
+        sampleConnectionsTask = nil
+    }
+
+    private func schedulerLoop() async {
+        // 不要在启动瞬间跑 auto-select —— 它会对几十上百个节点并发 TCP 探测，
+        // 抢主线程 + 网络 + UI 渲染。等 5 秒让 app 完成首屏。
+        try? await Task.sleep(for: .seconds(5))
+        if Task.isCancelled { return }
+
+        if settings.autoSelectTrigger == .onAppLaunch || settings.autoSelectTrigger == .onAppLaunchAndInterval {
+            await autoSelectBestNode()
+        }
+        var lastAutoSelect = Date()
+        var lastRefresh = Date()
+
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(15))
+            if Task.isCancelled { break }
+
+            let now = Date()
+            let trigger = settings.autoSelectTrigger
+            if (trigger == .interval || trigger == .onAppLaunchAndInterval)
+                && now.timeIntervalSince(lastAutoSelect) >= settings.autoSelectIntervalSeconds {
+                await autoSelectBestNode()
+                lastAutoSelect = Date()
+            }
+
+            let refreshInterval = settings.subscriptionRefreshIntervalSeconds
+            if refreshInterval > 0 && now.timeIntervalSince(lastRefresh) >= refreshInterval {
+                for sub in subscriptions {
+                    await refreshSubscription(sub)
+                }
+                lastRefresh = Date()
+            }
+        }
+    }
+
+    /// 在没接入真隧道之前给「连接」页一些演示数据。真隧道接入后整个方法可删。
+    private func sampleConnectionsLoop() async {
+        let demos: [(host: String, type: ConnectionType, rule: String)] = [
+            ("api.openai.com", .https, "DOMAIN-SUFFIX,openai.com,PROXY"),
+            ("www.google.com", .https, "DOMAIN-SUFFIX,google.com,PROXY"),
+            ("github.com", .https, "DOMAIN-SUFFIX,github.com,PROXY"),
+            ("baidu.com", .https, "GEOIP,CN,DIRECT"),
+            ("anthropic.com", .https, "DOMAIN-SUFFIX,anthropic.com,PROXY")
+        ]
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(3))
+            if Task.isCancelled { break }
+            let demo = demos.randomElement()!
+            let route = (demo.rule.hasSuffix("DIRECT") ? "DIRECT" : (currentNode?.name ?? "PROXY"))
+            var conn = Connection(
+                targetHost: demo.host,
+                sourceAddress: "127.0.0.1:\(Int.random(in: 50000...60000))",
+                targetAddress: "\(demo.host):443",
+                type: demo.type,
+                route: route,
+                matchedRule: demo.rule,
+                uploadBytes: Int64.random(in: 1024...102400),
+                downloadBytes: Int64.random(in: 10240...1048576),
+                uploadSpeedBps: Int64.random(in: 0...50000),
+                downloadSpeedBps: Int64.random(in: 0...500000)
+            )
+            // 60% 概率：标记为已关闭（让两种状态都能演示）
+            if Bool.random() && Bool.random() {
+                conn.closedAt = Date()
+                conn.uploadSpeedBps = 0
+                conn.downloadSpeedBps = 0
+            }
+            connections.insert(conn, at: 0)
+            if connections.count > 50 {
+                connections.removeLast(connections.count - 50)
+            }
+        }
+    }
+}
+
+/// 远程拉取的轻量状态。
+public enum RemoteFetchStatus: Sendable, Equatable {
+    case idle
+    case loading
+    case success(at: Date, count: Int)
+    case failure(message: String)
+}
+
+/// 公网 IP / 地理信息。
+public struct PublicIPInfo: Codable, Sendable, Equatable {
+    public var ip: String
+    public var country: String?
+    public var region: String?
+    public var city: String?
+    public var isp: String?
+    public var fetchedAt: Date
+
+    public init(ip: String, country: String? = nil, region: String? = nil, city: String? = nil, isp: String? = nil, fetchedAt: Date = Date()) {
+        self.ip = ip
+        self.country = country
+        self.region = region
+        self.city = city
+        self.isp = isp
+        self.fetchedAt = fetchedAt
+    }
+}
+

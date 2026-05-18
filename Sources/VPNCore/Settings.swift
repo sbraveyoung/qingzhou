@@ -1,0 +1,96 @@
+import Foundation
+
+public enum AppearanceTheme: String, Codable, Sendable, CaseIterable {
+    case system
+    case light
+    case dark
+}
+
+public enum AppLanguage: String, Codable, Sendable, CaseIterable {
+    case system
+    case zhHans = "zh-Hans"
+    case zhHant = "zh-Hant"
+    case en
+    case ja
+}
+
+/// 自动择优触发时机。
+public enum AutoSelectTrigger: String, Codable, Sendable, CaseIterable {
+    case onAppLaunch         // 每次 app 启动
+    case interval            // 定时
+    case onAppLaunchAndInterval
+    case off
+}
+
+/// 全局设置 —— 持久化到 UserDefaults / 文件。
+public struct Settings: Codable, Sendable {
+    public var proxyMode: ProxyMode
+    public var autoSelectTrigger: AutoSelectTrigger
+    public var autoSelectIntervalSeconds: TimeInterval   // 仅在 .interval / 组合时有效
+    public var subscriptionRefreshIntervalSeconds: TimeInterval  // 订阅自动刷新间隔；0 表示关闭
+    public var nodeSortOrder: NodeSortOrder
+    public var ruleSourceURL: URL?                       // 远程规则集，可被覆盖
+    public var systemProxyEnabled: Bool                  // macOS：是否设置系统代理
+    public var launchAtLogin: Bool                       // macOS：开机自启
+    public var httpPort: Int
+    public var socksPort: Int
+    public var logLevel: String                          // 用字符串以解耦 VPNLogging
+    public var theme: AppearanceTheme
+    public var language: AppLanguage
+
+    public init(
+        proxyMode: ProxyMode = .rule,
+        autoSelectTrigger: AutoSelectTrigger = .onAppLaunch,
+        autoSelectIntervalSeconds: TimeInterval = 30 * 60,
+        subscriptionRefreshIntervalSeconds: TimeInterval = 3600,
+        nodeSortOrder: NodeSortOrder = .latency,
+        ruleSourceURL: URL? = URL(string: "https://raw.githubusercontent.com/pexcn/daily/gh-pages/shadowrocket/whitelist.conf"),
+        systemProxyEnabled: Bool = false,
+        launchAtLogin: Bool = false,
+        httpPort: Int = 7890,
+        socksPort: Int = 7891,
+        logLevel: String = "INFO",
+        theme: AppearanceTheme = .system,
+        language: AppLanguage = .system
+    ) {
+        self.proxyMode = proxyMode
+        self.autoSelectTrigger = autoSelectTrigger
+        self.autoSelectIntervalSeconds = autoSelectIntervalSeconds
+        self.subscriptionRefreshIntervalSeconds = subscriptionRefreshIntervalSeconds
+        self.nodeSortOrder = nodeSortOrder
+        self.ruleSourceURL = ruleSourceURL
+        self.systemProxyEnabled = systemProxyEnabled
+        self.launchAtLogin = launchAtLogin
+        self.httpPort = httpPort
+        self.socksPort = socksPort
+        self.logLevel = logLevel
+        self.theme = theme
+        self.language = language
+    }
+
+    /// 旧版没有 subscriptionRefreshIntervalSeconds 字段；解码时给个默认值。
+    enum CodingKeys: String, CodingKey {
+        case proxyMode, autoSelectTrigger, autoSelectIntervalSeconds
+        case subscriptionRefreshIntervalSeconds
+        case nodeSortOrder, ruleSourceURL, systemProxyEnabled, launchAtLogin
+        case httpPort, socksPort, logLevel, theme, language
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.proxyMode = try c.decodeIfPresent(ProxyMode.self, forKey: .proxyMode) ?? .rule
+        self.autoSelectTrigger = try c.decodeIfPresent(AutoSelectTrigger.self, forKey: .autoSelectTrigger) ?? .onAppLaunch
+        self.autoSelectIntervalSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .autoSelectIntervalSeconds) ?? 30 * 60
+        self.subscriptionRefreshIntervalSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .subscriptionRefreshIntervalSeconds) ?? 3600
+        self.nodeSortOrder = try c.decodeIfPresent(NodeSortOrder.self, forKey: .nodeSortOrder) ?? .latency
+        self.ruleSourceURL = try c.decodeIfPresent(URL.self, forKey: .ruleSourceURL)
+            ?? URL(string: "https://raw.githubusercontent.com/pexcn/daily/gh-pages/shadowrocket/whitelist.conf")
+        self.systemProxyEnabled = try c.decodeIfPresent(Bool.self, forKey: .systemProxyEnabled) ?? false
+        self.launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
+        self.httpPort = try c.decodeIfPresent(Int.self, forKey: .httpPort) ?? 7890
+        self.socksPort = try c.decodeIfPresent(Int.self, forKey: .socksPort) ?? 7891
+        self.logLevel = try c.decodeIfPresent(String.self, forKey: .logLevel) ?? "INFO"
+        self.theme = try c.decodeIfPresent(AppearanceTheme.self, forKey: .theme) ?? .system
+        self.language = try c.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
+    }
+}

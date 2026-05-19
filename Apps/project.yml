@@ -33,7 +33,7 @@ targets:
     info:
       path: iOS/Info.plist
       properties:
-        CFBundleDisplayName: VPN
+        CFBundleDisplayName: 轻舟
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSCameraUsageDescription: 扫描二维码以快速添加节点或订阅
@@ -80,7 +80,7 @@ targets:
     info:
       path: macOS/Info.plist
       properties:
-        CFBundleDisplayName: VPN
+        CFBundleDisplayName: 轻舟
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
@@ -133,7 +133,7 @@ targets:
     info:
       path: Tunnel-iOS/Info.plist
       properties:
-        CFBundleDisplayName: VPN Tunnel
+        CFBundleDisplayName: 轻舟 Tunnel
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
@@ -168,7 +168,7 @@ targets:
     info:
       path: Tunnel-macOS/Info.plist
       properties:
-        CFBundleDisplayName: VPN Tunnel
+        CFBundleDisplayName: 轻舟 Tunnel
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:

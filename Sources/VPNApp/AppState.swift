@@ -236,7 +236,7 @@ public final class AppState {
                 node: node,
                 mode: settings.proxyMode,
                 shareLink: shareLink,
-                description: "VPN · \(node.name)"
+                description: "轻舟 · \(node.name)"
             )
             try await tunnelManager.start()
             isVPNRunning = true

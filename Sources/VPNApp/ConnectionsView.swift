@@ -5,6 +5,7 @@ public struct ConnectionsView: View {
     @Bindable var state: AppState
     @State private var keyword: String = ""
     @State private var filter: ConnectionFilter = .active
+    @State private var showDomainAnalysis = false
 
     enum ConnectionFilter: String, CaseIterable, Identifiable {
         case active = "活跃"
@@ -22,7 +23,7 @@ public struct ConnectionsView: View {
                 ContentUnavailableView {
                     Label("暂无连接", systemImage: "antenna.radiowaves.left.and.right.slash")
                 } description: {
-                    Text("真正的隧道接入后这里会展示实时连接。当前展示的是示例数据。")
+                    Text("开启 VPN 后，这里会展示真实的访问记录。")
                 }
                 .frame(maxHeight: .infinity)
             } else {
@@ -35,12 +36,13 @@ public struct ConnectionsView: View {
         .navigationTitle("连接")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                NavigationLink {
-                    DomainAnalysisView(connections: state.connections)
-                } label: {
+                Button { showDomainAnalysis = true } label: {
                     Label("域名分析", systemImage: "chart.pie")
                 }
             }
+        }
+        .navigationDestination(isPresented: $showDomainAnalysis) {
+            DomainAnalysisView(connections: state.connections)
         }
         .searchable(text: $keyword, prompt: "搜索 host / route / app")
     }

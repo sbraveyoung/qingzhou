@@ -90,15 +90,13 @@ public enum TunnelAppGroup {
         containerURL?.appendingPathComponent(accessLogName)
     }
 
-    /// xray 的 `log.access` 要指向这个路径。entitlement 不全（容器 nil）时返回 nil，
-    /// 此时 compose 不写 access 段，xray 也就不产日志 —— 主 App 那边读不到、连接列表为空。
+    /// xray 的 `log.access` 要指向这个路径。返回前 createFile 覆盖式建一个空文件 ——
+    /// 既清掉上次会话的旧日志，又**验证容器可写**：成功才返回路径（并给 xray 留好空文件去 append）；
+    /// 失败（容器 nil / 不可写）返回 nil，compose 就不写 access 段，xray 照常启动 ——
+    /// **绝不让 access log 拖垮 VPN**。
     public static func accessLogPath() -> String? {
-        accessLogURL?.path
-    }
-
-    /// 每次启动隧道前清掉上次会话残留的 access log，避免主 App 读到旧连接。
-    public static func clearAccessLog() {
-        guard let url = accessLogURL else { return }
-        try? FileManager.default.removeItem(at: url)
+        guard let url = accessLogURL else { return nil }
+        guard FileManager.default.createFile(atPath: url.path, contents: nil) else { return nil }
+        return url.path
     }
 }

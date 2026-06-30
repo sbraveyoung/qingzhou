@@ -44,6 +44,10 @@ public struct Settings: Codable, Sendable {
     public var logLevel: String                          // 用字符串以解耦 VPNLogging
     public var theme: AppearanceTheme
     public var language: AppLanguage
+    /// macOS：开启「打开指定 App 自动连 VPN」。配合 autoConnectApps 用（见 AppLaunchWatcher）。
+    public var autoConnectOnAppLaunch: Bool
+    /// 触发自动连的 App bundle id 集合（如 ["com.tinyspeck.slackmacgap"]）。
+    public var autoConnectApps: Set<String>
 
     public init(
         proxyMode: ProxyMode = .rule,
@@ -58,7 +62,9 @@ public struct Settings: Codable, Sendable {
         launchAtLogin: Bool = false,
         logLevel: String = "INFO",
         theme: AppearanceTheme = .system,
-        language: AppLanguage = .system
+        language: AppLanguage = .system,
+        autoConnectOnAppLaunch: Bool = false,
+        autoConnectApps: Set<String> = []
     ) {
         self.proxyMode = proxyMode
         self.autoSelectTrigger = autoSelectTrigger
@@ -73,6 +79,8 @@ public struct Settings: Codable, Sendable {
         self.logLevel = logLevel
         self.theme = theme
         self.language = language
+        self.autoConnectOnAppLaunch = autoConnectOnAppLaunch
+        self.autoConnectApps = autoConnectApps
     }
 
     /// 旧版没有这些 interval 字段；解码时给个默认值。
@@ -83,6 +91,7 @@ public struct Settings: Codable, Sendable {
         case nodeSortOrder, excludedRegions, preferredRegion
         case ruleSourceURL, launchAtLogin
         case logLevel, theme, language
+        case autoConnectOnAppLaunch, autoConnectApps
     }
 
     public init(from decoder: Decoder) throws {
@@ -101,5 +110,7 @@ public struct Settings: Codable, Sendable {
         self.logLevel = try c.decodeIfPresent(String.self, forKey: .logLevel) ?? "INFO"
         self.theme = try c.decodeIfPresent(AppearanceTheme.self, forKey: .theme) ?? .system
         self.language = try c.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
+        self.autoConnectOnAppLaunch = try c.decodeIfPresent(Bool.self, forKey: .autoConnectOnAppLaunch) ?? false
+        self.autoConnectApps = try c.decodeIfPresent(Set<String>.self, forKey: .autoConnectApps) ?? []
     }
 }

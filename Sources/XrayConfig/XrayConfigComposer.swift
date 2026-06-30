@@ -41,7 +41,8 @@ public enum XrayConfigComposer {
     /// - Returns: 可以直接喂给 `XrayCore.run(configJSON:)` 的完整 xray JSON
     public static func compose(
         outboundsJSON: String,
-        mode: ProxyMode
+        mode: ProxyMode,
+        accessLogPath: String? = nil
     ) throws -> String {
         guard let data = outboundsJSON.data(using: .utf8),
               let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -88,8 +89,16 @@ public enum XrayConfigComposer {
             ]
         ]]
 
+        // 开了 access log，xray 会把每条连接（from src accepted net:host:port [in -> out]）
+        // 追加写到这个文件；主 App 读出来解析成真实连接（AccessLogParser）。sniffing 已开，
+        // 所以 host 是嗅探出的域名而非 IP。
+        var logSection: [String: Any] = ["loglevel": "warning"]
+        if let accessLogPath, !accessLogPath.isEmpty {
+            logSection["access"] = accessLogPath
+        }
+
         let config: [String: Any] = [
-            "log": ["loglevel": "warning"],
+            "log": logSection,
             "inbounds": inbounds,
             "outbounds": outbounds,
             "routing": buildRouting(mode: mode),

@@ -229,7 +229,7 @@ final class AppStateTests: XCTestCase {
     func testSchedulersStartAndCancelCleanly() async {
         let state = makeState()
         state.startSchedulers()
-        // 等一小会让 sampleConnectionsLoop 至少跑一次
+        // 等一小会让各调度 loop 至少跑一次
         try? await Task.sleep(for: .seconds(0.05))
         state.stopSchedulers()
         // 不 crash 即可；任务取消是 happy path

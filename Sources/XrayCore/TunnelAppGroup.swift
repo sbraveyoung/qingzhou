@@ -81,4 +81,24 @@ public enum TunnelAppGroup {
             return false
         }
     }
+
+    // MARK: - access log（xray 写、主 App 增量读解析成真实连接）
+
+    public static let accessLogName = "access.log"
+
+    private static var accessLogURL: URL? {
+        containerURL?.appendingPathComponent(accessLogName)
+    }
+
+    /// xray 的 `log.access` 要指向这个路径。entitlement 不全（容器 nil）时返回 nil，
+    /// 此时 compose 不写 access 段，xray 也就不产日志 —— 主 App 那边读不到、连接列表为空。
+    public static func accessLogPath() -> String? {
+        accessLogURL?.path
+    }
+
+    /// 每次启动隧道前清掉上次会话残留的 access log，避免主 App 读到旧连接。
+    public static func clearAccessLog() {
+        guard let url = accessLogURL else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
 }

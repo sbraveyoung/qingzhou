@@ -89,7 +89,13 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let xrayJSON: String
         do {
             let outboundsJSON = try resolveOutboundsJSON(nodeJSON: nodeJSON, shareLink: shareLink)
-            xrayJSON = try XrayConfigComposer.compose(outboundsJSON: outboundsJSON, mode: mode)
+            // 清掉上次会话的 access log，让 xray 把这次的连接日志写到 App Group，主 App 解析展示。
+            TunnelAppGroup.clearAccessLog()
+            xrayJSON = try XrayConfigComposer.compose(
+                outboundsJSON: outboundsJSON,
+                mode: mode,
+                accessLogPath: TunnelAppGroup.accessLogPath()
+            )
         } catch {
             os_log("share link → xray config 转换失败: %{public}@",
                    log: log, type: .error, error.localizedDescription)

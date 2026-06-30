@@ -25,6 +25,12 @@ public enum AppGroupStorage {
         containerURL?.appendingPathComponent(name).appendingPathExtension("json")
     }
 
+    /// xray 写的 access log 文件（主 App 增量读解析成真实连接）。
+    /// 文件名须与 XrayCore.TunnelAppGroup.accessLogName 一致（两模块互不依赖）。
+    public static var accessLogURL: URL? {
+        containerURL?.appendingPathComponent("access.log")
+    }
+
     /// 把可编码值写到共享容器；entitlement 未配置时静默失败返回 false。
     @discardableResult
     public static func write<T: Encodable>(_ value: T, to name: String) -> Bool {

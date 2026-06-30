@@ -26,8 +26,8 @@ public final class AppState {
     public var customRules: [Rule] = []
     public var remoteRules: [Rule] = []
     public var connections: [Connection] = []
-    /// 实时流量波形数据（滑动窗口）。真隧道经 App Group 上报 `TrafficStats` 后喂进来；
-    /// 接入前由 sampleConnectionsLoop 用聚合速率驱动，让波形 UI 先跑起来。
+    /// 实时流量波形数据（滑动窗口）。appex 经 App Group 上报 `TrafficStats` 喂进来；
+    /// 没开 VPN / 没真实上报时为空，UI 显示「等待流量」。
     public var trafficHistory = TrafficHistory(capacity: 60)
     public var settings: Settings = Settings()
     public var lastSpeedTestReport: SpeedTestReport?
@@ -60,10 +60,12 @@ public final class AppState {
     public let tunnelManager: VPNTunnelManager
 
     private var schedulerTask: Task<Void, Never>?
-    private var sampleConnectionsTask: Task<Void, Never>?
     private var trafficPollingTask: Task<Void, Never>?
+    private var accessLogPollingTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
     private var ipRefreshTask: Task<Void, Never>?
+    /// access log 文件已读到的字节位置（增量读，不重复解析）。
+    private var accessLogOffset: UInt64 = 0
 
     public init(
         logger: Logger = Logger(),
@@ -521,23 +523,21 @@ public final class AppState {
         schedulerTask = Task { @MainActor [weak self] in
             await self?.schedulerLoop()
         }
-        if connections.isEmpty {
-            sampleConnectionsTask = Task { @MainActor [weak self] in
-                await self?.sampleConnectionsLoop()
-            }
-        }
         trafficPollingTask = Task { @MainActor [weak self] in
             await self?.trafficPollingLoop()
+        }
+        accessLogPollingTask = Task { @MainActor [weak self] in
+            await self?.accessLogPollingLoop()
         }
     }
 
     public func stopSchedulers() {
         schedulerTask?.cancel()
         schedulerTask = nil
-        sampleConnectionsTask?.cancel()
-        sampleConnectionsTask = nil
         trafficPollingTask?.cancel()
         trafficPollingTask = nil
+        accessLogPollingTask?.cancel()
+        accessLogPollingTask = nil
     }
 
     private func schedulerLoop() async {
@@ -588,45 +588,34 @@ public final class AppState {
         }
     }
 
-    /// 在没接入真隧道之前给「连接」页一些演示数据。真隧道接入后整个方法可删。
-    private func sampleConnectionsLoop() async {
-        let demos: [(host: String, type: ConnectionType, rule: String)] = [
-            ("api.openai.com", .https, "DOMAIN-SUFFIX,openai.com,PROXY"),
-            ("www.google.com", .https, "DOMAIN-SUFFIX,google.com,PROXY"),
-            ("github.com", .https, "DOMAIN-SUFFIX,github.com,PROXY"),
-            ("baidu.com", .https, "GEOIP,CN,DIRECT"),
-            ("anthropic.com", .https, "DOMAIN-SUFFIX,anthropic.com,PROXY")
-        ]
+    /// 每 2 秒增量读 App Group 里 xray 写的 access log，解析成真实连接。
+    /// 替代了早期的示例连接产线 —— 现在「连接」页和「域名分析」都吃真实数据。
+    private func accessLogPollingLoop() async {
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(2))
             if Task.isCancelled { break }
-            let demo = demos.randomElement()!
-            let route = (demo.rule.hasSuffix("DIRECT") ? "DIRECT" : (currentNode?.name ?? "PROXY"))
-            var conn = Connection(
-                targetHost: demo.host,
-                sourceAddress: "127.0.0.1:\(Int.random(in: 50000...60000))",
-                targetAddress: "\(demo.host):443",
-                type: demo.type,
-                route: route,
-                matchedRule: demo.rule,
-                uploadBytes: Int64.random(in: 1024...102400),
-                downloadBytes: Int64.random(in: 10240...1048576),
-                uploadSpeedBps: Int64.random(in: 0...50000),
-                downloadSpeedBps: Int64.random(in: 0...500000)
-            )
-            // 60% 概率：标记为已关闭（让两种状态都能演示）
-            if Bool.random() && Bool.random() {
-                conn.closedAt = Date()
-                conn.uploadSpeedBps = 0
-                conn.downloadSpeedBps = 0
-            }
-            connections.insert(conn, at: 0)
-            if connections.count > 50 {
-                connections.removeLast(connections.count - 50)
-            }
-            // 注意：**不要**在这里用采样数据驱动波形 —— 否则没开 VPN 也会有"流量"，误导用户。
-            // 波形只由 trafficPollingLoop 读 appex 真实上报来驱动。
+            ingestAccessLog()
         }
+    }
+
+    private func ingestAccessLog() {
+        guard let url = AppGroupStorage.accessLogURL,
+              let handle = try? FileHandle(forReadingFrom: url) else { return }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        if size < accessLogOffset { accessLogOffset = 0 }   // 文件被新会话清空/重建 → 重头读
+        guard size > accessLogOffset else { return }        // 没有新行
+        try? handle.seek(toOffset: accessLogOffset)
+        let data = (try? handle.readToEnd()) ?? Data()
+        accessLogOffset = size
+        guard let text = String(data: data, encoding: .utf8) else { return }
+        let entries = AccessLogParser.parse(text)
+        guard !entries.isEmpty else { return }
+        let proxyName = currentNode?.name
+        for entry in entries {
+            connections.insert(entry.makeConnection(proxyDisplayName: proxyName), at: 0)
+        }
+        if connections.count > 200 { connections.removeLast(connections.count - 200) }
     }
 
     /// appex 经 App Group 上报的真实 `TrafficStats` 喂进波形窗口。UI 观察 `trafficHistory` 自动重绘。

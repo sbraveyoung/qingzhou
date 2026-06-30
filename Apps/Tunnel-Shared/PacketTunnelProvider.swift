@@ -180,14 +180,21 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             os_log("WARNING: geo files missing — rule mode 会失败，global mode 应当还能跑（已不依赖 geoip）", log: log, type: .error)
         }
 
-        // 5.1) 每次启动前删掉 mph 缓存。
-        //   关 VPN 时 Extension 进程被 launchd 直接杀掉，如果上次 xray 正在写这个缓存，
-        //   会留下一个损坏的缓存文件。之后 libXray 启动时（不论 rule 还是 global 模式都会读它）
-        //   加载到坏 geo 数据 → 需代理的域名被错误分流到直连 → 访问不到，且重启也救不回。
-        //   删掉强制用 .dat 重建，代价是 rule 模式每次启动多几百毫秒（global 不加载 geo，无感）。
-        if fm.fileExists(atPath: mphCache) {
-            try? fm.removeItem(atPath: mphCache)
-            os_log("cleared stale mph cache before start", log: log, type: .default)
+        // 5.1) 构建 mph 缓存 —— **必须在 run 之前**。
+        //   rule 模式的 routing 用 geosite:cn / geoip:cn，xray router 启动时会去「加载」
+        //   mph 缓存文件，没有就报 "failed to load file: xray-mph.cache: no such file"。
+        //   BuildMphCache 读配置文件、解析其中的 geo 引用、从 .dat 构建缓存。所以先把
+        //   config 写成临时文件再 build。global 模式没有 geo 引用，build 是空操作但无害。
+        //   best-effort：build 失败只记日志不中断 —— global 不需要缓存照样能跑；
+        //   rule 真缺缓存的话，下面 run 会再报一次明确错误。
+        let configFileURL = cachesURL.appendingPathComponent("xray-config.json")
+        do {
+            try configJSON.write(to: configFileURL, atomically: true, encoding: .utf8)
+            try XrayCore.buildMphCache(configPath: configFileURL.path, geoDir: geoDir, mphCachePath: mphCache)
+            os_log("✅ mph cache built at %{public}@", log: log, type: .default, mphCache)
+        } catch {
+            os_log("⚠️ buildMphCache 失败（global 模式可忽略）: %{public}@",
+                   log: log, type: .error, error.localizedDescription)
         }
 
         // 6) 启动 xray-core，给 socketpair 的另一端当 TUN fd

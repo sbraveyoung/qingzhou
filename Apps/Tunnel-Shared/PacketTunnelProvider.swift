@@ -26,12 +26,12 @@ import XrayConfig
 import XrayCore
 
 final class PacketTunnelProvider: NEPacketTunnelProvider {
-    private let log = OSLog(subsystem: "com.sbraveyoung.vpn.tunnel", category: "PacketTunnel")
+    private let log = OSLog(subsystem: "com.sbraveyoung.qingzhou.tunnel", category: "PacketTunnel")
 
     /// (Swift 持的一端, libXray 持的一端)。stopTunnel 时只 close swift 端；
     /// xray 端由 XrayCore.stop() 内部 close。
     private var tunPair: (swift: Int32, xray: Int32)?
-    private let bridgeQueue = DispatchQueue(label: "com.sbraveyoung.vpn.tunnel.bridge", qos: .userInitiated)
+    private let bridgeQueue = DispatchQueue(label: "com.sbraveyoung.qingzhou.tunnel.bridge", qos: .userInitiated)
 
     /// 控制两个方向拷贝循环是否继续。stopTunnel 时设 false。读写竞争一两个 packet 无所谓。
     private var bridgeActive = false
@@ -56,7 +56,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let shareLink = providerConfig?["shareLink"] as? String ?? ""
         guard !nodeJSON.isEmpty || !shareLink.isEmpty else {
             let err = NSError(
-                domain: "com.sbraveyoung.vpn.tunnel",
+                domain: "com.sbraveyoung.qingzhou.tunnel",
                 code: 1001,
                 userInfo: [NSLocalizedDescriptionKey:
                     "providerConfiguration 里既没有 nodeJSON 也没有 shareLink。主 App 需要先用 VPNTunnelManager.configure(...) 保存配置。"]
@@ -111,7 +111,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         // 3) 建 socketpair —— xray 端当 TUN fd 给 libXray
         guard let pair = makeSocketPair() else {
             let err = NSError(
-                domain: "com.sbraveyoung.vpn.tunnel",
+                domain: "com.sbraveyoung.qingzhou.tunnel",
                 code: 1003,
                 userInfo: [NSLocalizedDescriptionKey: "socketpair() 失败：errno=\(errno)"]
             )
@@ -202,7 +202,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             return result
         }
         throw NSError(
-            domain: "com.sbraveyoung.vpn.tunnel",
+            domain: "com.sbraveyoung.qingzhou.tunnel",
             code: 1004,
             userInfo: [NSLocalizedDescriptionKey:
                 "两条路径都失败：nodeJSON 解析失败且 shareLink 为空"]

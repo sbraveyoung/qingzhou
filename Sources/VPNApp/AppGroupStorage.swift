@@ -13,7 +13,7 @@ import VPNCore
 public enum AppGroupStorage {
 
     /// App Group 标识符。和 entitlements 里的值必须一致。
-    public static let groupIdentifier = "group.com.sbraveyoung.vpn"
+    public static let groupIdentifier = "group.com.sbraveyoung.qingzhou"
 
     /// 共享容器根目录。entitlement 未配置时返回 nil。
     public static var containerURL: URL? {

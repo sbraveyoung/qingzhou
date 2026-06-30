@@ -55,9 +55,9 @@ public final class VPNTunnelManager {
 
     // Extension 的 Bundle Identifier，必须和 project.yml 里 VPN-Tunnel-* target 的 PRODUCT_BUNDLE_IDENTIFIER 一致
     #if os(iOS)
-    private let providerBundleId = "com.sbraveyoung.vpn.ios.tunnel"
+    private let providerBundleId = "com.sbraveyoung.qingzhou.ios.tunnel"
     #else
-    private let providerBundleId = "com.sbraveyoung.vpn.mac.tunnel"
+    private let providerBundleId = "com.sbraveyoung.qingzhou.mac.tunnel"
     #endif
 
     public init(logger: Logger? = nil) {

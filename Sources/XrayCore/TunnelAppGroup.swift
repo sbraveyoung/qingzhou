@@ -12,7 +12,7 @@ import Foundation
 public enum TunnelAppGroup {
     /// App Group 标识符。和 entitlements 里的 `com.apple.security.application-groups` 必须一致。
     /// 如果你 fork 项目改了 group id，这里和 entitlements 都要改。
-    public static let groupIdentifier: String = "group.com.sbraveyoung.vpn"
+    public static let groupIdentifier: String = "group.com.sbraveyoung.qingzhou"
 
     /// AppGroup 容器根目录。entitlement 未配置或 sandbox 拒绝时为 nil。
     public static var containerURL: URL? {

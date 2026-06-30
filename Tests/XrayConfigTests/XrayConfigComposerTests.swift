@@ -141,6 +141,32 @@ final class XrayConfigComposerTests: XCTestCase {
         }
     }
 
+    /// libXray.convertShareLinks 对 hysteria2（`hy2://...insecure=1`）这类链接仍会在
+    /// streamSettings 里产出 `allowInsecure`。我们打包的 xray-core 已硬移除该字段，带着它
+    /// 整个 outbound TLS 解析失败、xray 起不来。compose 必须递归剔除——无论它藏多深。
+    func testComposeStripsAllowInsecureRecursively() throws {
+        let fakeOutboundsJSON = #"""
+        {
+          "outbounds": [
+            {
+              "tag": "whatever",
+              "protocol": "hysteria2",
+              "settings": {
+                "servers": [{"address": "jp.example.com", "port": 443}]
+              },
+              "streamSettings": {
+                "security": "tls",
+                "tlsSettings": {"serverName": "jp.example.com", "allowInsecure": true}
+              }
+            }
+          ]
+        }
+        """#
+        let composed = try XrayConfigComposer.compose(outboundsJSON: fakeOutboundsJSON, mode: .global)
+        XCTAssertFalse(composed.contains("allowInsecure"),
+                       "allowInsecure 必须从最终配置里彻底消失，否则这版 xray-core 起不来")
+    }
+
     // MARK: - 错误路径
 
     func testComposeRejectsInvalidJSON() {

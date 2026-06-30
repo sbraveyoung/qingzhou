@@ -54,8 +54,16 @@ public enum XrayConfigComposer {
         // 而 sendThrough 本意是本地绑定 IP，xray-core 当 net.IP 解析必失败 →
         // "unable to send through: <node 名>"。这里主动剔除，让 xray 用默认。
         // 顺手把 `streamSettings.sockopt.bindToDevice` 之类的也别让 libXray 乱写。
+        //
+        // 另外：libXray.convertShareLinks 这条 fallback 路径（hysteria2 等 NodeConverter
+        // 还没覆盖的协议会走它）仍会从 `...insecure=1` 链接里产出 streamSettings 里的
+        // `allowInsecure`。但我们打包的这版 xray-core 已经**硬移除**了该字段
+        //（"The feature allowInsecure has been removed and migrated to pinnedPeerCertSha256"），
+        // 带着它整个 outbound TLS 解析失败、xray 起不来。NodeConverter 那条路（path A）
+        // 已经不再产出它，这里再递归兜底一次，把两条路径都覆盖住。
         for i in 0..<outbounds.count {
             outbounds[i].removeValue(forKey: "sendThrough")
+            outbounds[i] = Self.stripAllowInsecure(outbounds[i])
         }
 
         // libXray 给的第一个 outbound 就是用户那条链接对应的协议。打 "proxy" tag。
@@ -93,6 +101,30 @@ public enum XrayConfigComposer {
             options: [.sortedKeys]
         )
         return String(data: out, encoding: .utf8) ?? "{}"
+    }
+
+    // MARK: - 防御性清理
+
+    /// 递归剔除任意层级里名为 `allowInsecure` 的 key。allowInsecure 只是 TLS 校验开关，
+    /// 移除它等价于"按默认校验证书"，对证书合法的节点（绝大多数）没有副作用；对自签节点
+    /// 本就需要 pinnedPeerCertSha256（拿不到指纹，暂不支持）。无论它藏在
+    /// streamSettings.tlsSettings / realitySettings 还是 hysteria 自己的字段里都能清掉。
+    private static func stripAllowInsecure(_ value: Any) -> Any {
+        if var dict = value as? [String: Any] {
+            dict.removeValue(forKey: "allowInsecure")
+            for (k, v) in dict {
+                dict[k] = stripAllowInsecure(v)
+            }
+            return dict
+        }
+        if let array = value as? [Any] {
+            return array.map { stripAllowInsecure($0) }
+        }
+        return value
+    }
+
+    private static func stripAllowInsecure(_ dict: [String: Any]) -> [String: Any] {
+        stripAllowInsecure(dict as Any) as? [String: Any] ?? dict
     }
 
     // MARK: - Routing

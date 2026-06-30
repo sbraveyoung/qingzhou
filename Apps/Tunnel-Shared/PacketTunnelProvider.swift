@@ -257,7 +257,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 }
                 batchUp += packets[i].count
             }
-            self.byteCounters.withLock { $0.up += Int64(batchUp) }
+            let total = Int64(batchUp)   // 固化成 let，withLock 闭包不能捕获可变的 batchUp
+            self.byteCounters.withLock { $0.up += total }
             if !self.loggedFirstApplePacket && !packets.isEmpty {
                 self.loggedFirstApplePacket = true
                 os_log("✅ first Apple→Xray batch: %d packets, first %d bytes, proto=%d",

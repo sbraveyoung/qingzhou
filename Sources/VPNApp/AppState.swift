@@ -160,9 +160,14 @@ public final class AppState {
 
     public func select(_ node: Node) {
         guard nodes.contains(where: { $0.id == node.id }) else { return }
+        let changed = currentNodeId != node.id
         currentNodeId = node.id
         logger.info("Selected node \(node.name)", category: "app")
         persist()
+        // 手动切节点时若 VPN 在跑，也热切换立即生效
+        if changed {
+            Task { await reapplyRunningTunnel() }
+        }
     }
 
     public func addNode(fromURL urlString: String) throws {
@@ -283,6 +288,33 @@ public final class AppState {
         isVPNRunning = false
     }
 
+    /// 当前节点变了、且 VPN 正在运行时，热切换到新节点：重新写配置 + 断开重连。
+    /// 这样自动择优 / 手动选节点能立即生效，不用用户手动关开 VPN 开关。
+    ///
+    /// 注：NetworkExtension 没有「热 reload 配置」的同步 API —— 改了 providerConfiguration
+    /// 必须断开重连才生效。所以这里是 stop → 短暂等连接断开 → start，会有不到 1 秒的断流。
+    /// （需真机验证这个时序在你的网络下是否够稳。）
+    public func reapplyRunningTunnel() async {
+        guard isVPNRunning,
+              let node = currentNode,
+              let shareLink = NodeEncoder.shareLink(node) else { return }
+        do {
+            try await tunnelManager.configure(
+                node: node,
+                mode: settings.proxyMode,
+                shareLink: shareLink,
+                description: "轻舟 · \(node.name)"
+            )
+            tunnelManager.stop()
+            try? await Task.sleep(for: .milliseconds(300))  // 等旧连接断开
+            try await tunnelManager.start()
+            logger.info("Hot-switched running tunnel to \(node.name)", category: "tunnel")
+        } catch {
+            tunnelError = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+            logger.error("Hot-switch failed: \(tunnelError ?? "?")", category: "tunnel")
+        }
+    }
+
     public func autoSelectBestNode() async {
         guard !nodes.isEmpty else { return }
         let testedAt = Date()
@@ -298,6 +330,7 @@ public final class AppState {
             }
         }
         nodes = measured
+        let previousId = currentNodeId
         if let best = pickBestRespectingRegions(from: measured) {
             currentNodeId = best.id
             logger.info("Auto-selected \(best.name) [\(best.region)] (\(best.lastLatencyMs ?? -1)ms)", category: "app")
@@ -305,6 +338,10 @@ public final class AppState {
             logger.warn("Auto-select found no viable node", category: "app")
         }
         persist()
+        // 节点变了且 VPN 在跑 → 热切换，立即生效
+        if currentNodeId != previousId {
+            await reapplyRunningTunnel()
+        }
     }
 
     /// 在测速结果里挑最佳节点，应用「地区排除」+「地区优先」：

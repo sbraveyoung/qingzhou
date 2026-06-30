@@ -268,7 +268,18 @@ public final class AppState {
 
     public func autoSelectBestNode() async {
         guard !nodes.isEmpty else { return }
-        let measured = await nodeSelector.measure(nodes: nodes)
+        let testedAt = Date()
+        // 跟手动测速一样：待测节点显示 loading，每测完一个摘掉。
+        measuringNodeIds = Set(nodes.filter { !$0.isExcluded }.map(\.id))
+        defer { measuringNodeIds = [] }
+        let measured = await nodeSelector.measure(nodes: nodes) { [weak self] nodeID, result in
+            guard let self else { return }
+            self.measuringNodeIds.remove(nodeID)
+            if let i = self.nodes.firstIndex(where: { $0.id == nodeID }) {
+                self.nodes[i].lastLatencyMs = result.latencyMs
+                self.nodes[i].lastTestedAt = testedAt
+            }
+        }
         nodes = measured
         if let best = await nodeSelector.pickBest(from: measured) {
             currentNodeId = best.id

@@ -61,6 +61,15 @@ public struct SettingsView: View {
                 Stepper("", value: state.setting(\.socksPort), in: 1024...65535)
                     .labelsHidden()
             }
+            #if os(macOS)
+            Text("VPN 开启后，本机的 HTTP / SOCKS5 代理会监听 127.0.0.1 上的这两个端口，"
+                 + "终端、curl 等可通过它们走代理（xray 无单端口混合，HTTP/SOCKS 各一个口）。"
+                 + "端口被其它程序占用时，开启会直接报错。")
+                .font(.caption2).foregroundStyle(.secondary)
+            #else
+            Text("这两个端口仅在 macOS 版生效；iOS 全程走系统 VPN 隧道，不需要本地代理端口。")
+                .font(.caption2).foregroundStyle(.secondary)
+            #endif
             Picker("日志级别", selection: state.setting(\.logLevel)) {
                 Text("DEBUG").tag("DEBUG")
                 Text("INFO").tag("INFO")
@@ -153,13 +162,25 @@ public struct SettingsView: View {
     private var macIntegrationSection: some View {
         Section("macOS 集成") {
             Toggle("启用系统代理", isOn: state.setting(\.systemProxyEnabled))
-            Text("会通过 `networksetup` 给所有网络服务设置 127.0.0.1:\(state.settings.httpPort) / SOCKS:\(state.settings.socksPort)。需要 app 不在 sandbox 中运行。")
+            Text("通过 `networksetup` 把系统代理指向 127.0.0.1:\(state.settings.httpPort) (HTTP) / \(state.settings.socksPort) (SOCKS)。"
+                 + "⚠️ 仅在「非沙箱」构建（如直接 Xcode 运行的开发版）中生效；App Store 沙箱版无法调用 networksetup。"
+                 + "沙箱版请用下方「终端代理」的 export 命令手动设置，效果等同。")
                 .font(.caption2).foregroundStyle(.secondary)
+            if isSandboxed {
+                Label("当前为沙箱运行，系统代理开关不会生效，请用终端 export 方式。",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.caption2).foregroundStyle(.orange)
+            }
             Toggle("开机自启", isOn: state.setting(\.launchAtLogin))
             Button("立即应用") {
                 state.applyMacSystemPreferences()
             }
         }
+    }
+
+    /// 是否运行在 App Sandbox 里 —— 沙箱进程环境里有 APP_SANDBOX_CONTAINER_ID。
+    private var isSandboxed: Bool {
+        ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
     }
     #endif
 

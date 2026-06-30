@@ -37,7 +37,25 @@ public enum XrayConfigComposer {
     ///   - outboundsJSON: libXray.convertShareLinks 的返回（顶层是 {"outbounds":[...]}）
     ///   - mode: 用户选的代理模式（global / rule / direct）
     /// - Returns: 可以直接喂给 `XrayCore.run(configJSON:)` 的完整 xray JSON
-    public static func compose(outboundsJSON: String, mode: ProxyMode) throws -> String {
+    /// 本地代理监听端口。仅 macOS 用 —— 让 curl / 终端 / 其它 app 通过
+    /// `127.0.0.1:httpPort`（HTTP）/ `127.0.0.1:socksPort`（SOCKS5）走代理。
+    /// iOS 传 nil（连不到 Extension 的 loopback，且省 50MB 内存）。
+    ///
+    /// 注意：xray-core 没有 Clash 那种单端口混合（mixed-port），HTTP / SOCKS 各占一个端口。
+    public struct LocalProxyPorts: Sendable, Equatable {
+        public let httpPort: Int
+        public let socksPort: Int
+        public init(httpPort: Int, socksPort: Int) {
+            self.httpPort = httpPort
+            self.socksPort = socksPort
+        }
+    }
+
+    public static func compose(
+        outboundsJSON: String,
+        mode: ProxyMode,
+        localProxy: LocalProxyPorts? = nil
+    ) throws -> String {
         guard let data = outboundsJSON.data(using: .utf8),
               let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw Error.invalidOutboundJSON
@@ -61,7 +79,7 @@ public enum XrayConfigComposer {
 
         // tun inbound：MTU 跟 PacketTunnelProvider 里 setTunnelNetworkSettings 保持一致。
         // sniffing 开启：让 xray 从 TLS SNI / HTTP Host 提取真实域名，便于按域名路由。
-        let inbounds: [[String: Any]] = [[
+        var inbounds: [[String: Any]] = [[
             "tag": "tun-in",
             "protocol": "tun",
             "settings": [
@@ -74,6 +92,35 @@ public enum XrayConfigComposer {
                 "routeOnly": false
             ]
         ]]
+
+        // macOS：额外开本地 SOCKS5 + HTTP inbound，让系统代理 / 终端 env var 能用。
+        // 都绑在 127.0.0.1，不对外暴露。loopback 不走 TUN，所以不会形成回环。
+        if let lp = localProxy {
+            inbounds.append([
+                "tag": "socks-in",
+                "protocol": "socks",
+                "listen": "127.0.0.1",
+                "port": lp.socksPort,
+                "settings": [
+                    "udp": true,
+                    "auth": "noauth"
+                ],
+                "sniffing": [
+                    "enabled": true,
+                    "destOverride": ["http", "tls", "quic"]
+                ]
+            ])
+            inbounds.append([
+                "tag": "http-in",
+                "protocol": "http",
+                "listen": "127.0.0.1",
+                "port": lp.httpPort,
+                "sniffing": [
+                    "enabled": true,
+                    "destOverride": ["http", "tls"]
+                ]
+            ])
+        }
 
         let config: [String: Any] = [
             "log": ["loglevel": "warning"],

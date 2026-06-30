@@ -68,6 +68,15 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let nodeName = (providerConfig?["nodeName"] as? String) ?? "node"
         let modeRaw = (providerConfig?["proxyMode"] as? String) ?? ProxyMode.global.rawValue
         let mode = ProxyMode(rawValue: modeRaw) ?? .global
+
+        // 本地代理端口：仅 macOS 会塞这两个值（iOS 用不上 loopback 代理 + 省内存）。
+        var localProxy: XrayConfigComposer.LocalProxyPorts?
+        if let http = (providerConfig?["localProxyHttpPort"] as? NSNumber)?.intValue,
+           let socks = (providerConfig?["localProxySocksPort"] as? NSNumber)?.intValue {
+            localProxy = .init(httpPort: http, socksPort: socks)
+            os_log("local proxy inbounds: http=%d socks=%d", log: log, type: .default, http, socks)
+        }
+
         os_log("starting tunnel for node: %{public}@ mode=%{public}@",
                log: log, type: .default, nodeName, mode.rawValue)
 
@@ -75,7 +84,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let xrayJSON: String
         do {
             let outboundsJSON = try resolveOutboundsJSON(nodeJSON: nodeJSON, shareLink: shareLink)
-            xrayJSON = try XrayConfigComposer.compose(outboundsJSON: outboundsJSON, mode: mode)
+            xrayJSON = try XrayConfigComposer.compose(
+                outboundsJSON: outboundsJSON, mode: mode, localProxy: localProxy)
         } catch {
             os_log("share link → xray config 转换失败: %{public}@",
                    log: log, type: .error, error.localizedDescription)

@@ -103,6 +103,35 @@ final class XrayConfigComposerTests: XCTestCase {
         XCTAssertNotNil(alidns)
     }
 
+    // MARK: - 本地代理 inbound（macOS）
+
+    func testComposeWithoutLocalProxyHasOnlyTunInbound() throws {
+        let json = try parse(try XrayConfigComposer.compose(outboundsJSON: fakeTrojanOutbounds, mode: .global))
+        let inbounds = json["inbounds"] as! [[String: Any]]
+        XCTAssertEqual(inbounds.count, 1)
+        XCTAssertEqual(inbounds[0]["protocol"] as? String, "tun")
+    }
+
+    func testComposeWithLocalProxyAddsSocksAndHttpInbounds() throws {
+        let lp = XrayConfigComposer.LocalProxyPorts(httpPort: 7890, socksPort: 7891)
+        let json = try parse(try XrayConfigComposer.compose(
+            outboundsJSON: fakeTrojanOutbounds, mode: .global, localProxy: lp))
+        let inbounds = json["inbounds"] as! [[String: Any]]
+        XCTAssertEqual(inbounds.count, 3)
+
+        let byProto = Dictionary(grouping: inbounds, by: { $0["protocol"] as! String })
+        XCTAssertNotNil(byProto["tun"])
+
+        let socks = byProto["socks"]!.first!
+        XCTAssertEqual(socks["listen"] as? String, "127.0.0.1")
+        XCTAssertEqual(socks["port"] as? Int, 7891)
+        XCTAssertEqual((socks["settings"] as? [String: Any])?["udp"] as? Bool, true)
+
+        let http = byProto["http"]!.first!
+        XCTAssertEqual(http["listen"] as? String, "127.0.0.1")
+        XCTAssertEqual(http["port"] as? Int, 7890)
+    }
+
     // MARK: - 防御性清理 libXray 错填字段
 
     /// libXray 在某些 share link 上会把节点显示名塞进 outbound.sendThrough。

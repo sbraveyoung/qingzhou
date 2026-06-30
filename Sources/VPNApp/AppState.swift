@@ -230,13 +230,30 @@ public final class AppState {
             return
         }
 
+        // 本地代理端口：仅 macOS 启用（iOS 连不到 Extension 的 loopback）。
+        // 启动前先探端口占用，被占了立刻给清晰报错，不白白拉起整条隧道。
+        var localProxyPorts: (http: Int, socks: Int)?
+        #if os(macOS)
+        let http = settings.httpPort
+        let socks = settings.socksPort
+        if let occupied = PortProbe.firstOccupied(among: [http, socks]) {
+            isVPNRunning = false
+            tunnelError = "本地代理端口 \(occupied) 已被其它程序占用（可能是另一个 VPN / 代理软件）。"
+                + "请在「设置 → 端口」里改一个没被占用的端口，或退出占用该端口的程序后重试。"
+            logger.error("local proxy port \(occupied) occupied; aborting tunnel start", category: "tunnel")
+            return
+        }
+        localProxyPorts = (http: http, socks: socks)
+        #endif
+
         do {
             // description 带节点名，方便用户在「系统设置 → 网络 → VPN」里识别
             try await tunnelManager.configure(
                 node: node,
                 mode: settings.proxyMode,
                 shareLink: shareLink,
-                description: "轻舟 · \(node.name)"
+                description: "轻舟 · \(node.name)",
+                localProxyPorts: localProxyPorts
             )
             try await tunnelManager.start()
             isVPNRunning = true

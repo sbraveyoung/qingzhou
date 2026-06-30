@@ -22,8 +22,10 @@ struct VPNiOSApp: App {
                 .preferredColorScheme(colorScheme(for: state.settings.theme))
                 .environment(\.locale, LocaleResolver.locale(for: state.settings.language))
                 .task {
-                    // 调度器 + 网络初始化 —— 都是 async，主线程立即让出
                     state.startSchedulers()
+                    // 网络初始化延后到首屏稳定之后再跑：首次启动（尤其墙内/无网）这些请求会挂起，
+                    // 别让它们和冷启动争抢。延迟 + 失败都不影响 UI。
+                    try? await Task.sleep(for: .seconds(2))
                     if state.remoteRules.isEmpty {
                         await state.refreshRemoteRules()
                     }

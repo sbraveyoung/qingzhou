@@ -407,6 +407,10 @@ public final class AppState {
         subscriptions.append(sub)
         persist()
         await refreshSubscription(sub)
+        // 首次拉到节点后自动测速一遍，省得用户手动点。渐进式刷新，UI 会逐个显示延迟。
+        if subscriptionErrors[sub.id] == nil, !nodes.isEmpty {
+            await measureAllNodes()
+        }
     }
 
     public func refreshSubscription(_ subscription: Subscription) async {

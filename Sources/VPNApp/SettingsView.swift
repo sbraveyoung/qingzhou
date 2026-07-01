@@ -162,6 +162,11 @@ public struct SettingsView: View {
             Button("立即应用") {
                 state.applyMacSystemPreferences()
             }
+            Button("启用来源 App 标注") {
+                Task { try? await ContentFilterManager.enable() }
+            }
+            Text("开启后「连接」页会标注每条流量是哪个 App 发起的。首次会弹系统授权；需 content-filter 扩展。")
+                .font(.caption2).foregroundStyle(.secondary)
         }
     }
     #endif

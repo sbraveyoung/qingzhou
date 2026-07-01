@@ -68,6 +68,8 @@ public final class AppState {
     private var accessLogOffset: UInt64 = 0
     /// appex 写的「假 IP → 域名」映射（FakeDNS），把 access log 的 198.18.x.x 翻回域名。
     private var fakeDNSMap: [String: String] = [:]
+    /// content filter 扩展写的「源端口 → 来源 App bundle id」（仅 macOS）。
+    private var sourceAppMap: [String: String] = [:]
 
     public init(
         logger: Logger = Logger(),
@@ -600,6 +602,9 @@ public final class AppState {
             if let map = AppGroupStorage.read([String: String].self, from: "fakedns-map") {
                 fakeDNSMap = map
             }
+            if let apps = AppGroupStorage.read([String: String].self, from: "source-apps") {
+                sourceAppMap = apps
+            }
             ingestAccessLog()
         }
     }
@@ -624,6 +629,11 @@ public final class AppState {
             if let domain = fakeDNSMap[entry.targetHost] {
                 conn.targetHost = domain
                 conn.targetAddress = "\(domain):\(entry.targetPort)"
+            }
+            // 源端口 → 来源 App（macOS content filter 标注的 bundle id）
+            if let port = entry.sourceAddress.split(separator: ":").last.map(String.init),
+               let bundleID = sourceAppMap[port] {
+                conn.sourceApp = bundleID
             }
             connections.insert(conn, at: 0)
         }

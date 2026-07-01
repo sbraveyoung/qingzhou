@@ -122,6 +122,10 @@ targets:
       - target: VPN-Tunnel-macOS
         embed: true
         codeSign: true
+      # Content Filter 扩展：给连接标注来源 App（需 content-filter-provider entitlement 特批）
+      - target: VPN-Filter-macOS
+        embed: true
+        codeSign: true
 
   # ===========================================================================
   # PacketTunnel Extension targets（阶段 2）
@@ -207,6 +211,39 @@ targets:
       # XrayConfigComposer 现在住在 XrayConfig（纯 Swift，不拖 LibXray）。
       - package: VPN
         product: XrayConfig
+
+  # macOS 内容过滤扩展：只观测连接、标注来源 App（bundle id），不阻断。
+  # 只在 macOS 有 —— iOS 的 content filter 需要 MDM 监督，普通 App Store app 用不了。
+  VPN-Filter-macOS:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Filter-macOS
+    info:
+      path: Filter-macOS/Info.plist
+      properties:
+        CFBundleDisplayName: 轻舟 Filter
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.filter-data
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).FilterDataProvider
+    entitlements:
+      path: Filter-macOS/Filter.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        # content-filter-provider 需 Apple 特批（和 packet-tunnel 是两项不同的批复）
+        com.apple.developer.networking.networkextension:
+          - content-filter-provider
+        com.apple.security.application-groups:
+          - group.com.sbraveyoung.qingzhou
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sbraveyoung.qingzhou.mac.filter
+        DEVELOPMENT_TEAM: UK7MME38H9
+        SWIFT_VERSION: "6.0"
+        ENABLE_HARDENED_RUNTIME: YES
 
 schemes:
   VPN-iOS:

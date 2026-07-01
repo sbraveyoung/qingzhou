@@ -52,7 +52,9 @@ final class FilterDataProvider: NEFilterDataProvider {
     }
 
     /// 本地端点端口（App 建立连接时分配的源端口，与 access log 的 sourceAddress 端口一致）。
+    /// localFlowEndpoint 需 macOS 15；macOS 14 拿不到端口 → 返回 nil，来源 App 标注在 14 上不生效。
     private func localPort(of flow: NEFilterSocketFlow) -> String? {
+        guard #available(macOS 15.0, *) else { return nil }
         guard let ep = flow.localFlowEndpoint, case let .hostPort(_, port) = ep else { return nil }
         return "\(port.rawValue)"
     }

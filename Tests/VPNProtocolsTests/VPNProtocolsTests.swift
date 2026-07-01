@@ -123,6 +123,26 @@ final class VPNProtocolsTests: XCTestCase {
         XCTAssertEqual(node.parameters["path"], "/path")
     }
 
+    func testParseVLESSReality() throws {
+        // 典型 vless + REALITY 分享链接：security=reality，带 pbk/sid/spx/fp/flow/sni
+        let url = "vless://11111111-2222-3333-4444-555555555555@real.example.com:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.microsoft.com&fp=chrome&pbk=xN-public-key-base64&sid=0123abcd&spx=%2F&type=tcp#REALITY-Node"
+        let node = try ProxyURLParser.parse(url)
+        XCTAssertEqual(node.protocolType, .vless)
+        XCTAssertEqual(node.uuid, "11111111-2222-3333-4444-555555555555")
+        XCTAssertEqual(node.host, "real.example.com")
+        XCTAssertEqual(node.port, 443)
+        XCTAssertEqual(node.name, "REALITY-Node")
+        XCTAssertEqual(node.parameters["encryption"], "none")
+        XCTAssertEqual(node.parameters["security"], "reality")
+        XCTAssertEqual(node.parameters["flow"], "xtls-rprx-vision")
+        XCTAssertEqual(node.parameters["sni"], "www.microsoft.com")
+        XCTAssertEqual(node.parameters["fp"], "chrome")
+        XCTAssertEqual(node.parameters["pbk"], "xN-public-key-base64")
+        XCTAssertEqual(node.parameters["sid"], "0123abcd")
+        XCTAssertEqual(node.parameters["spx"], "/")   // %2F 解码回 "/"
+        XCTAssertEqual(node.parameters["type"], "tcp")
+    }
+
     // MARK: - hysteria2
 
     func testParseHysteria2() throws {

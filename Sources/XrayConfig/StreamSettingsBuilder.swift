@@ -97,12 +97,17 @@ enum StreamSettingsBuilder {
     }
 
     private static func buildREALITYSettings(_ p: [String: String], host: String) -> [String: Any] {
+        // REALITY 是 xray-core 的 TLS 伪装：客户端拿 publicKey(pbk) + shortId(sid) 完成握手，
+        // fingerprint 用来模拟真实浏览器 ClientHello，spiderX 是回落爬虫路径。
+        // 注意：reality 跟 tls 互斥，这里绝不能输出 tlsSettings / allowInsecure。
         var reality: [String: Any] = [:]
         reality["serverName"] = p["sni"] ?? p["peer"] ?? host
         if let pbk = p["pbk"] { reality["publicKey"] = pbk }
         if let sid = p["sid"] { reality["shortId"] = sid }
-        if let spx = p["spx"] { reality["spiderX"] = spx }
-        if let fp = p["fp"] { reality["fingerprint"] = fp }
+        // fingerprint 默认 chrome、spiderX 默认 "/" —— 大多数分享链接会显式带 fp/spx，
+        // 缺省时给 xray-core 一个能正常握手的合理值。
+        reality["fingerprint"] = (p["fp"].flatMap { $0.isEmpty ? nil : $0 }) ?? "chrome"
+        reality["spiderX"] = (p["spx"].flatMap { $0.isEmpty ? nil : $0 }) ?? "/"
         return reality
     }
 

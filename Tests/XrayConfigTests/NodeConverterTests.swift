@@ -191,17 +191,84 @@ final class NodeConverterTests: XCTestCase {
                 "sni": "www.cloudflare.com",
                 "pbk": "ABCD-public-key",
                 "sid": "deadbeef",
+                "spx": "/spider",
                 "fp": "chrome",
                 "flow": "xtls-rprx-vision"
             ]
         )
-        let stream = streamSettings(try NodeConverter.toOutboundDict(node))
+        let out = try NodeConverter.toOutboundDict(node)
+        // user 里必须带 flow + encryption=none
+        let users = serverDict(out, key: "vnext")["users"] as! [[String: Any]]
+        XCTAssertEqual(users[0]["flow"] as? String, "xtls-rprx-vision")
+        XCTAssertEqual(users[0]["encryption"] as? String, "none")
+
+        let stream = streamSettings(out)
         XCTAssertEqual(stream["security"] as? String, "reality")
+        // reality 与 tls 互斥：绝不能输出 tlsSettings
         XCTAssertNil(stream["tlsSettings"])
         let reality = stream["realitySettings"] as! [String: Any]
         XCTAssertEqual(reality["serverName"] as? String, "www.cloudflare.com")
         XCTAssertEqual(reality["publicKey"] as? String, "ABCD-public-key")
         XCTAssertEqual(reality["shortId"] as? String, "deadbeef")
+        XCTAssertEqual(reality["spiderX"] as? String, "/spider")
+        XCTAssertEqual(reality["fingerprint"] as? String, "chrome")
+        // 这版 xray-core 移除了 allowInsecure —— reality 块里也绝不能出现
+        XCTAssertNil(reality["allowInsecure"], "allowInsecure 必须不出现")
+    }
+
+    /// 分享链接缺 fp / spx 时，realitySettings 用默认值 chrome / "/"。
+    func testVLESSREALITYDefaultsFingerprintAndSpiderX() throws {
+        let node = Node(
+            name: "v", protocolType: .vless,
+            host: "real.example", port: 443,
+            uuid: "u",
+            parameters: [
+                "security": "reality",
+                "sni": "www.apple.com",
+                "pbk": "pubkey",
+                "sid": "abcd"
+                // 故意不带 fp / spx
+            ]
+        )
+        let reality = streamSettings(try NodeConverter.toOutboundDict(node))["realitySettings"] as! [String: Any]
+        XCTAssertEqual(reality["serverName"] as? String, "www.apple.com")
+        XCTAssertEqual(reality["fingerprint"] as? String, "chrome")
+        XCTAssertEqual(reality["spiderX"] as? String, "/")
+    }
+
+    /// reality 节点里带 flow=xtls-rprx-vision + 完整 realitySettings 的形态校验。
+    /// （分享链接 → Node 的端到端解析在 VPNProtocolsTests 里覆盖，这里只测 Node → outbound。）
+    func testVLESSREALITYWithSpiderXAndTCP() throws {
+        let node = Node(
+            name: "reality", protocolType: .vless,
+            host: "real.example.com", port: 443,
+            uuid: "u-1234",
+            parameters: [
+                "encryption": "none",
+                "flow": "xtls-rprx-vision",
+                "security": "reality",
+                "sni": "www.microsoft.com",
+                "fp": "chrome",
+                "pbk": "share-pbk",
+                "sid": "00ff",
+                "spx": "/",
+                "type": "tcp"
+            ]
+        )
+        let out = try NodeConverter.toOutboundDict(node)
+        XCTAssertEqual(out["protocol"] as? String, "vless")
+        let users = serverDict(out, key: "vnext")["users"] as! [[String: Any]]
+        XCTAssertEqual(users[0]["flow"] as? String, "xtls-rprx-vision")
+        XCTAssertEqual(users[0]["encryption"] as? String, "none")
+        let stream = streamSettings(out)
+        XCTAssertEqual(stream["network"] as? String, "tcp")
+        XCTAssertEqual(stream["security"] as? String, "reality")
+        XCTAssertNil(stream["tlsSettings"])
+        let reality = stream["realitySettings"] as! [String: Any]
+        XCTAssertEqual(reality["serverName"] as? String, "www.microsoft.com")
+        XCTAssertEqual(reality["publicKey"] as? String, "share-pbk")
+        XCTAssertEqual(reality["shortId"] as? String, "00ff")
+        XCTAssertEqual(reality["spiderX"] as? String, "/")
         XCTAssertEqual(reality["fingerprint"] as? String, "chrome")
     }
 

@@ -22,14 +22,14 @@
 | **S0** | 已完成 | Foundation | 订阅 / 节点 / 规则 / UI / 测试 113 项 ✅ |
 | **S1** | 已完成 | 内核集成 | libXray.xcframework 编通 → XrayCore 模块 → 3 项 XrayCore 测试通过 → macOS app 启动并 link libxray ✅ |
 | **S2** | 代码完成 | Tunnel 接通 | PacketTunnelProvider 接 xray-core + xrayJSON 通过 `providerConfiguration` 传给 Extension + geo 文件内嵌 Extension Resources。无 App Group → 不弹「访问其他 App 数据」隐私警告。iOS + macOS + Tunnel.appex 都编通。**剩下：真机测一次** —— 见 [S2-TESTING.md](S2-TESTING.md) |
-| **S3** | W5–6 | Node→Config | trojan/vmess/vless/ss 4 协议→xray JSON 转换器 + 30+ 单测 |
+| **S3** | 已完成 | Node→Config | ✅ trojan/vmess/vless/ss 4 协议→xray JSON 转换器 + 单测（VLESS+REALITY 也已支持） |
 | **S4** | W7–8 | App Store 准备 | Privacy Policy / 应用信息 / 截图 / TestFlight 内测 1 周无 crash |
 | **S5** | W9–10 | 🚀 **MVP 上架** | App Store 提交 → 通过审核 → 公开上架 |
-| **S6** | W11–12 | macOS port | macOS 版本（共用 Tunnel 桥接代码） |
-| **S7** | W13–14 | 体验差异化 | 自动测速 + 自动择优（用户最有感知的卖点） |
+| **S6** | 大部分已就位 | macOS port | macOS 版本（共用 Tunnel 桥接代码）已基本可用；macOS 系统扩展 / 内容过滤相关收尾中 |
+| **S7** | 已完成 | 体验差异化 | ✅ 自动测速 + 自动择优（择优后 toast 提示）+ region prefer/exclude + 切模式自动重启隧道 |
 | **S8** | W15–16 | hysteria2 | ✅ 已提前完成：打包的 xray-core 自带 hysteria 传输，hy2 走原生 `Hysteria2Converter`（无需单独 lib） |
-| **S9** | W17–18 | Widget + Shortcuts | iOS Widget 一键开关 + Apple Shortcuts |
-| **S10** | W19–20 | Clash YAML | Clash / Mihomo 配置导入 |
+| **S9** | 进行中 | Widget + Shortcuts | Shortcuts / App-Intents 引擎已写好（`TunnelIntents.swift` + `AppLaunchWatcher.swift`）；**剩下：新建 Widget app-extension target + macOS 自动连 UI 接线** |
+| **S10** | 进行中 | Clash YAML | `ClashConfigParser` 已存在（trojan/vmess/vless/ss/hy2）；**剩下：vmess-snell/ssr/http/socks5 暂跳过** |
 | **S11** | W21–22 | i18n + Polish | 简繁英日 + 暗色模式 + Onboarding |
 | **S12** | W23–24 | v1.0 正式版 | 反馈修一遍，1.0 release |
 
@@ -52,33 +52,33 @@
 - ❌ i18n（S11）—— 先简体中文一种
 - ❌ QR 扫码（先粘贴链接就够）
 - ❌ 自定义规则编辑器（先用默认规则集）
-- ❌ 自动测速 + 自动择优（S7）—— MVP 先纯手动
+- ✅ 自动测速 + 自动择优（S7）—— 原计划 MVP 后做，现已完成
 - ❌ macOS 系统代理 / 开机自启（macOS 没上 = 没意义）
 
 ## 每个 sprint 的关键技术任务
 
-### S1：内核集成（你现在在这里）
-- [ ] libXray repo clone + 摸清 gomobile bind 命令
-- [ ] 装标准 Apple gomobile（卸 sagernet fork）
-- [ ] gomobile bind → 产出 Frameworks/LibXray.xcframework
-- [ ] Package.swift 加 binaryTarget + 新 module Sources/XrayCore/
-- [ ] 写 XrayCore.swift：包装 LibXrayVersion()、LibXrayInit()
-- [ ] 在 macOS app 里 print 出版本号，证明链入成功
-- [ ] Apps/Tunnel-Shared/PacketTunnelProvider.swift 改：startTunnel 里调 LibXrayVersion()
-- [ ] commit checkpoint
+### S1：内核集成 ✅ 已完成
+- [x] libXray repo clone + 摸清 gomobile bind 命令
+- [x] 装标准 Apple gomobile（卸 sagernet fork）
+- [x] gomobile bind → 产出 Frameworks/LibXray.xcframework
+- [x] Package.swift 加 binaryTarget + 新 module Sources/XrayCore/
+- [x] 写 XrayCore.swift：包装 LibXrayVersion()、LibXrayInit()
+- [x] 在 macOS app 里 print 出版本号，证明链入成功
+- [x] Apps/Tunnel-Shared/PacketTunnelProvider.swift 改：startTunnel 里调 LibXrayVersion()
+- [x] commit checkpoint
 
-### S2：Tunnel 接通
-- [ ] 设计 LibXrayPlatformInterface 接口（看 libXray 实际暴露什么）
-- [ ] Apple NEPacketFlow ↔ Go TUN 文件描述符桥接
-- [ ] 用一个**硬编码**的 trojan 节点 JSON 验证翻墙
-- [ ] 实测：iPhone 真机 → 访问 google.com 成功
-- [ ] 测试用例（虽然主要是 manual）
+### S2：Tunnel 接通（代码完成，剩真机测一次）
+- [x] 设计 LibXrayPlatformInterface 接口（看 libXray 实际暴露什么）
+- [x] Apple NEPacketFlow ↔ Go TUN 文件描述符桥接
+- [x] 用一个**硬编码**的 trojan 节点 JSON 验证翻墙
+- [ ] 实测：iPhone 真机 → 访问 google.com 成功 ← **S2 唯一未完成项**，见 [S2-TESTING.md](S2-TESTING.md)
+- [x] 测试用例（虽然主要是 manual）
 
-### S3：Node→Config 转换
-- [ ] Sources/XrayConfig/ 模块
-- [ ] TrojanConverter / VMessConverter / VLESSConverter / ShadowsocksConverter
-- [ ] 每个 converter 至少 8 个单测（成功 + 各种字段缺失）
-- [ ] AppState.startTunnel() 改成：拿当前节点 → converter → 写到 AppGroup → 启动 tunnel
+### S3：Node→Config 转换 ✅ 已完成
+- [x] Sources/XrayConfig/ 模块
+- [x] TrojanConverter / VMessConverter / VLESSConverter / ShadowsocksConverter（外加原生 Hysteria2Converter + VLESS+REALITY）
+- [x] 每个 converter 单测（成功 + 各种字段缺失）
+- [x] AppState.startTunnel() 改成：拿当前节点 → converter → 写到 AppGroup → 启动 tunnel
 
 ### S4：App Store 准备
 - [ ] Privacy Policy 网页（GitHub Pages）
@@ -108,9 +108,32 @@
 | Privacy Policy 起草 | 低 | 低 | 用模板（VPN apps 标准 Privacy Policy 框架） |
 | 真机 Bug 调试慢（没 macOS 同步 build） | 中 | 中 | S2 之后保持每周至少 1 次真机回归 |
 
-## 当前状态 (S1 完成)
+## 当前状态 (2026-07-01)
 
-✅ **S1 内核集成完成 (2026-05-17)**：
+**Sprint 进度**：S1 ✅ · S2 代码完成（剩真机测一次）· S3 ✅ · S6 大部分已就位 · S7 ✅ · S8 ✅（提前）· S9 引擎完成（Widget target 未建）· S10 部分（ClashConfigParser 已存在）。剩下主线：S4/S5（App Store 上架）、S9 Widget target、S11 i18n/暗色/onboarding、S12 v1.0。
+
+**已完成并验证（206 单测全过）**：
+- 协议转换器 trojan/vmess/vless/ss + hysteria2（原生 `Hysteria2Converter`）+ VLESS+REALITY
+- 订阅添加 / 刷新；节点延迟测速；自动测速 + 自动择优（择优后 toast）；region prefer/exclude
+- 切代理模式时自动重启隧道；刷新时清理悬空节点选中；首页双公网 IP 展示
+- `LaunchScreen.storyboard`；iOS + macOS 静态「静海蓝」App 图标整套 asset
+
+**本轮新完成（真隧道数据管道）**：
+- **连接列表已改用真实数据**：走 xray `access.log`（旧的 `sampleConnectionsLoop` 已删）
+- FakeDNS 反查：把 fake IP（198.18.x.x IPv4 + fc00::/18 IPv6）映射回域名
+- 域名分析（聚合 + 每日摘要 + 规则建议）已在真实数据上工作
+
+**仍待办（真机 / target 层面）**：
+- 流量波形（a1）真机验证一次
+- 新建 Widget app-extension target + macOS 自动连 UI 接线（Shortcuts/App-Intents 引擎已写好）
+- S2 真机测试通过（见 [S2-TESTING.md](S2-TESTING.md)）
+- App Store 上架清单（见 [APP_STORE.md](APP_STORE.md)）——**硬阻塞：需要组织版 Apple Developer 账号（Guideline 5.4）**，外加 1024 图标导出、`PRIVACY.md` 生效日期填写 + GitHub Pages 部署、截图、TestFlight
+
+**已搁置**：macOS 来源 App 标注（内容过滤 + XPC）现由 `FeatureFlags.sourceAppLabeling=false` 关闭。
+
+---
+
+### S1 内核集成回顾 (2026-05-17)：
 - `Frameworks/LibXray.xcframework`（379MB，3 个 slice：iOS device / iOS sim / macOS）
 - `Sources/XrayCore/XrayCore.swift` Swift 包装层（version / isRunning / setTunFd / run / stop / convertShareLinks / ping）
 - 3 项 XrayCoreTests 全过：libXray dlopen 成功、`XrayVersion()` 返回真版本、`ConvertShareLinksToXrayJson()` 真翻 trojan 链接成 xray JSON
@@ -119,8 +142,8 @@
 - 已经发现并规避 gomobile + Xcode 26 的 maccatalyst 重复 framework 路径 bug
 
 📊 **当前规模**：
-- 5800+ 行 Swift 代码 + Sources/XrayCore
-- **116 单测全过**（XrayCore 增加 3 项）
+- Sources/XrayCore + Sources/XrayConfig 等多模块
+- **206 单测全过**（当前）
 - iOS + macOS 双平台编译通过
 - 订阅 / 节点 / 规则 / 测速 / 日志 / 持久化 / QR / IP 信息 / macOS 系统集成
 
@@ -138,6 +161,6 @@
   - `XrayCore.setTunFd(fd)` + `XrayCore.run(configJSON: ..., geoDir: ..., mphCachePath: ...)`
 - `Sources/QingzhouCore/NodeEncoder.swift`：Node → 分享链接字符串
 - `Sources/QingzhouApp/AppState.startTunnel()`：Node → share link → xray JSON → AppGroup → 启动 Extension
-- 验证：iOS + macOS + Tunnel.appex 都 BUILD SUCCEEDED，116 单测全过
+- 验证：iOS + macOS + Tunnel.appex 都 BUILD SUCCEEDED，206 单测全过
 
 ⏭️ **真机调试在你那边**：见 [S2-TESTING.md](S2-TESTING.md) 一步步跑。跑通了进 S3。

@@ -85,13 +85,9 @@
 - 7 个核心库 + UI 骨架，全部跨平台编译通过；
 - 73 项单测通过，覆盖所有有逻辑分支的路径。
 
-### 阶段 2 — 真隧道
-1. **集成 sing-box 作为协议核心**。把 sing-box 编成 xcframework：
-   ```bash
-   gomobile bind -target=ios,iossimulator,macos -o SingBox.xcframework \
-     github.com/sagernet/sing-box/experimental/libbox
-   ```
-   把产物放到 `Frameworks/SingBox.xcframework`，新建 `QingzhouCore-SingBox` 模块作为 Swift 与 Go 的胶水层。
+### 阶段 2 — 真隧道（已代码完成，剩真机验证）
+1. **集成 xray-core 作为协议核心（通过 libXray）**。使用预编译的 `Frameworks/LibXray.xcframework`（binary xcframework，无需自己 `gomobile bind`），新建 `XrayCore` 模块作为 Swift 与 Go 的胶水层（`Sources/XrayCore/`）。
+   > 注：早期设计曾计划用 sing-box，最终采用 xray-core / libXray；本项目**不使用 sing-box**。
 2. **Packet Tunnel Provider**。新建 `Network Extension` target；继承 `NEPacketTunnelProvider`；通过 App Group 共享配置文件和共享内存（连接列表）。
 3. **主 App ↔ Extension 通信**。`NETunnelProviderManager` 启动隧道；自定义 control message（`sendProviderMessage`）实时拉取连接、流量、当前规则命中。
 4. **macOS 系统代理 / 开机自启**。前者改 `networksetup -setwebproxy`；后者用 `SMAppService.mainApp` (macOS 13+)。

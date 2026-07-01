@@ -5,7 +5,7 @@
 ```bash
 swift build              # 必须通过
 swift test               # 必须 73 项全过（新增功能要加新测试）
-xcodebuild -scheme VPN-Package -destination 'generic/platform=iOS' build  # iOS 也要过
+xcodebuild -scheme Qingzhou-Package -destination 'generic/platform=iOS' build  # iOS 也要过
 ```
 
 ## 代码风格
@@ -63,5 +63,5 @@ xcodebuild -scheme VPN-Package -destination 'generic/platform=iOS' build  # iOS 
 - `bug`：行为偏离预期。
 - `enhancement`：新功能。
 - `protocol:<名字>`：协议解析相关。
-- `phase:2`：阶段 2 才会处理（涉及 NetworkExtension / sing-box）。
+- `phase:2`：阶段 2 才会处理（涉及 NetworkExtension / xray-core / libXray）。
 - `good first issue`：欢迎新人。

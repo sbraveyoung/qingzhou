@@ -1,6 +1,6 @@
 # Xcode / 真机待办（攒批统一验证）
 
-> 这几轮在命令行把**能编译验证的都做了**（188 测试全过）。下面是必须在 Xcode build +
+> 这几轮在命令行把**能编译验证的都做了**（206 测试全过）。下面是必须在 Xcode build +
 > 真机才能验证/完成的部分，攒成一批一起做。每项都标了已写好的代码位置和验证步骤。
 
 ---
@@ -18,15 +18,17 @@
 
 ---
 
-## 2. 连接列表真实数据（access log 管道，待实现 + 验证）
+## 2. 连接列表真实数据（access log 管道）✅ 已完成
 
-解析器 `AccessLogParser`（`Sources/QingzhouCore/`，8 测试）和 `DomainAnalyzer`（域名分析，9 测试）都就绪，**只差把真实 access log 喂进来**：
+**已接通并落地**（旧的 `sampleConnectionsLoop` 已删）：
 
-- [ ] `XrayConfigComposer.compose` 的 `log` 段加 `"access": <App Group 路径>`（现在只有 `loglevel`）。建议给 compose 加一个可选 `accessLogPath` 参数。**可编译。**
-- [ ] appex `bringUpXray` 里把 App Group 的 access.log 路径传进 compose。**appex，需真机。**
-- [ ] 主 App 轮询读该文件 → `AccessLogParser.parse` → 更新 `AppState.connections`（替换 `sampleConnectionsLoop`）。**可编译。**
+- [x] `XrayConfigComposer.compose` 的 `log` 段加 `access` 路径（App Group 下的 access.log）。
+- [x] appex `bringUpXray` 里把 App Group 的 access.log 路径传进 compose。
+- [x] 主 App 轮询读该文件 → `AccessLogParser.parse` → 更新 `AppState.connections`（已替换 `sampleConnectionsLoop`）。
+- [x] FakeDNS 反查：把 fake IP（198.18.x.x IPv4 + fc00::/18 IPv6）映射回真实域名。
+- [x] 域名分析（聚合 + 每日摘要 + 规则建议）已在真实数据上工作。
 
-接通后：连接页 + 域名分析自动吃真实数据，无需改它们。
+连接页 + 域名分析现在自动吃真实数据。**Nice-to-have：真机上再回归验证一次端到端。**
 
 ---
 

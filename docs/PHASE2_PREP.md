@@ -1,4 +1,12 @@
-# 阶段 2 准备工作指南
+# 阶段 2 准备工作指南（历史文档 · 已被取代）
+
+> ⚠️ **历史文档，已被取代 —— 别照这个 B/C 节做。** 本文写于早期，当时打算用 **sing-box** 作内核。
+> 实际项目最终采用的是 **xray-core**，通过 **libXray**（binary xcframework：`Frameworks/LibXray.xcframework`）接入，
+> **不使用 sing-box / SingBox.xcframework**。下文凡是提到 `sing-box` / `SingBox.xcframework` / `Libbox` 的地方，
+> 请一律理解为「历史方案」；真正落地的内核集成见 [ROADMAP.md](ROADMAP.md) 的 S1/S2 与 `Sources/XrayCore/`。
+> 另外，Swift 模块早期叫 `VPN*`，现已统一改名为 `Qingzhou*`（`QingzhouApp` / `QingzhouCore` / …）。
+>
+> A 节（Apple 后台配置：4 个 Bundle ID `com.sbraveyoung.qingzhou.*` + App Group `group.com.sbraveyoung.qingzhou`）仍然有效。
 
 > 这是给 **拿到付费 Apple Developer 账号、正在等 Packet Tunnel entitlement 审批** 的人看的。等审批的 1–4 周里，把下面 A / B 两件事做完，等邮件一到立刻能闭环。
 
@@ -15,7 +23,7 @@
 差的两块（外部依赖）：
 
 - ⏳ Apple 的 `packet-tunnel-provider` entitlement 审批
-- ⏳ sing-box.xcframework 编译
+- ⏳ ~~sing-box.xcframework 编译~~ →（历史；实际改用 xray-core / `LibXray.xcframework`）
 
 ---
 
@@ -69,7 +77,7 @@ Apple 邮件批复后，重复 A3 流程，这次勾 `Network Extensions` 那行
 
 ---
 
-## B. 编 sing-box.xcframework
+## B. 编 sing-box.xcframework（⚠️ 历史方案，已弃用 —— 实际用 xray-core / libXray，勿照做）
 
 预计耗时 **30–60 分钟**（含工具链下载）。这一步**完全可以现在就开始**，不依赖 Apple 审批。
 
@@ -127,7 +135,7 @@ ls -la Frameworks/SingBox.xcframework
 
 ---
 
-## C. （完成后我做）真接 sing-box
+## C. （完成后我做）真接内核（历史写的是 sing-box；实际落地为 xray-core / libXray）
 
 A4 邮件 + B4 产物都到位之后，告诉我，我做这几件事：
 

@@ -88,18 +88,13 @@ com.apple.security.application-groups = ["group.com.you.vpn"]
 > 个人开发者只能用 Personal VPN（`personal-vpn`），Packet Tunnel 需要企业账号或单独走 Apple 申请流程：
 > <https://developer.apple.com/contact/request/networking-entitlement>
 
-### 6) 集成 sing-box 作为协议核心
+### 6) 集成 xray-core 作为协议核心（通过 libXray）
 
-```bash
-# 假设你的 GOPATH 已就绪
-go install golang.org/x/mobile/cmd/gomobile@latest
-gomobile init
-gomobile bind -target=ios,iossimulator,macos \
-  -o Frameworks/SingBox.xcframework \
-  github.com/sagernet/sing-box/experimental/libbox
-```
+> 早期文档这里写的是 sing-box；实际项目采用 **xray-core**，通过 **libXray** 接入，**不使用 sing-box**。
 
-把 `SingBox.xcframework` 拖到 Xcode 项目，分别勾选主 App 和 Tunnel target。
+项目直接使用预编译的 binary xcframework `Frameworks/LibXray.xcframework`（重建脚本 `scripts/build-libxray.sh`），
+在 `Package.swift` 里以 `binaryTarget` 引入，`Sources/XrayCore/` 是 Swift 与 Go 的胶水层。
+XcodeGen 生成的两个 Tunnel target 均已 link 它，无需手动拖入。
 
 ### 7) 在 PacketTunnelProvider 里桥接
 
@@ -109,15 +104,15 @@ import QingzhouCore
 
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
-        // 1. 从 App Group 共享容器读取节点配置 + 规则
-        // 2. 用 sing-box 的 LibBox.start(...) 起核心
+        // 1. 从 App Group 共享容器读取节点配置（xray JSON）+ 规则
+        // 2. 用 XrayCore.setTunFd(fd) + XrayCore.run(configJSON:...) 起 xray-core
         // 3. 用 self.setTunnelNetworkSettings(...) 把虚拟接口配上
-        // 4. 起协程读 packetFlow → 喂给 sing-box；反向同理
+        // 4. NEPacketFlow ↔ Go TUN 文件描述符桥接，双向拷贝
     }
 }
 ```
 
-详细的 sing-box 桥接代码在阶段 2 的提交里会引入。
+真正的桥接代码见 `Apps/Tunnel-Shared/PacketTunnelProvider.swift` 与 `Sources/XrayCore/`。
 
 ### 8) macOS 系统代理 + 开机自启
 

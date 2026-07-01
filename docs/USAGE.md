@@ -101,11 +101,11 @@ let errors = logger.search(level: .warn, keyword: "")
 
 ## 真要让流量走代理
 
-当前阶段 1 的 App 跑起来后，所有 UI 都能用、订阅能拉、节点能存、规则能匹配、延迟能测，但 **VPN 开关只是个状态位**，不会真的建立隧道。这是有意为之 —— 真隧道部分（Packet Tunnel Provider + sing-box 核心）属于阶段 2，需要：
+真隧道部分（Packet Tunnel Provider + xray-core 核心，通过 libXray 接入）现已代码完成，仅剩真机跑通验证（见 [S2-TESTING.md](S2-TESTING.md)）。它依赖：
 
 1. Apple Developer 账号 + Network Extensions entitlement；
 2. 一个 Network Extension target；
-3. sing-box 编出来的 `xcframework`；
-4. App Group 配置。
+3. xray-core / libXray 编出来的 `xcframework`（`Frameworks/LibXray.xcframework`）；
+4. App Group 配置（`group.com.sbraveyoung.qingzhou`）。
 
 步骤见 [BUILD.md 第 4–7 节](BUILD.md#启用真正的-vpn-隧道阶段-2-工作)。

@@ -11,6 +11,9 @@ public final class ContentFilterManager: NSObject {
     public static let shared = ContentFilterManager()
     private let extensionID = "com.sbraveyoung.qingzhou.mac.filter"
     private var activation: CheckedContinuation<Void, Error>?
+    /// 必须持有 request —— 否则 submitRequest 之后 ARC 释放它，激活请求会被取消
+    /// （sysextd 日志里的 "client cancelled the connection" 就是这个）。
+    private var pendingRequest: OSSystemExtensionRequest?
     /// 系统提示"需要用户去系统设置批准扩展"时回调，UI 用来引导。
     public var onNeedsApproval: (() -> Void)?
 
@@ -26,6 +29,7 @@ public final class ContentFilterManager: NSObject {
             activation = cont
             let req = OSSystemExtensionRequest.activationRequest(forExtensionWithIdentifier: extensionID, queue: .main)
             req.delegate = self
+            pendingRequest = req
             OSSystemExtensionManager.shared.submitRequest(req)
         }
     }
@@ -56,10 +60,10 @@ public final class ContentFilterManager: NSObject {
 extension ContentFilterManager: OSSystemExtensionRequestDelegate {
     public nonisolated func request(_ request: OSSystemExtensionRequest,
                                     didFinishWithResult result: OSSystemExtensionRequest.Result) {
-        Task { @MainActor in self.activation?.resume(); self.activation = nil }
+        Task { @MainActor in self.activation?.resume(); self.activation = nil; self.pendingRequest = nil }
     }
     public nonisolated func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
-        Task { @MainActor in self.activation?.resume(throwing: error); self.activation = nil }
+        Task { @MainActor in self.activation?.resume(throwing: error); self.activation = nil; self.pendingRequest = nil }
     }
     public nonisolated func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
         Task { @MainActor in self.onNeedsApproval?() }

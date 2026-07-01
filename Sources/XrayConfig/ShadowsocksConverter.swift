@@ -21,7 +21,7 @@
 //   `"plugin": ..., "pluginOpts": ...` 即可；当前 MVP 不实现。
 
 import Foundation
-import VPNCore
+import QingzhouCore
 
 enum ShadowsocksConverter {
 

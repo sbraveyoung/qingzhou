@@ -6,9 +6,9 @@
 
 代码层面已经做完的（仓库现在的样子）：
 
-- ✅ 两个 PacketTunnel Extension target（`VPN-Tunnel-iOS` / `VPN-Tunnel-macOS`），stub `PacketTunnelProvider` 现在编得过、签得过、能嵌进主 app
+- ✅ 两个 PacketTunnel Extension target（`Qingzhou-Tunnel-iOS` / `Qingzhou-Tunnel-macOS`），stub `PacketTunnelProvider` 现在编得过、签得过、能嵌进主 app
 - ✅ 主 App 和 Extension 的 entitlements 已经写好 `packet-tunnel-provider` 和 `application-groups`
-- ✅ `AppGroupStorage` 共享存储类：写 `tunnel-config.json` 到 `group.com.sbraveyoung.vpn` 容器
+- ✅ `AppGroupStorage` 共享存储类：写 `tunnel-config.json` 到 `group.com.sbraveyoung.qingzhou` 容器
 - ✅ `VPNTunnelManager` 包装 `NETunnelProviderManager`：load / configure / start / stop API，错误兜底
 - ✅ 主页 VPN 开关接到 `VPNTunnelManager` 真启停；entitlement 拿不到时会弹 alert 提示
 
@@ -29,10 +29,10 @@ A1–A3 这三步不依赖 entitlement 审批，**现在就能做**。
 
 | Description | Bundle ID | 类型 |
 |---|---|---|
-| VPN iOS | `com.sbraveyoung.vpn.ios` | Explicit |
-| VPN iOS Tunnel | `com.sbraveyoung.vpn.ios.tunnel` | Explicit |
-| VPN macOS | `com.sbraveyoung.vpn.mac` | Explicit |
-| VPN macOS Tunnel | `com.sbraveyoung.vpn.mac.tunnel` | Explicit |
+| VPN iOS | `com.sbraveyoung.qingzhou.ios` | Explicit |
+| VPN iOS Tunnel | `com.sbraveyoung.qingzhou.ios.tunnel` | Explicit |
+| VPN macOS | `com.sbraveyoung.qingzhou.mac` | Explicit |
+| VPN macOS Tunnel | `com.sbraveyoung.qingzhou.mac.tunnel` | Explicit |
 
 > 注意是 **4 个** Bundle ID，不是 2 个。每个 app 都需要主 app + tunnel extension 各一个 ID。
 
@@ -47,16 +47,16 @@ A1–A3 这三步不依赖 entitlement 审批，**现在就能做**。
 
 | Description | Identifier |
 |---|---|
-| VPN Shared | `group.com.sbraveyoung.vpn` |
+| VPN Shared | `group.com.sbraveyoung.qingzhou` |
 
-> Identifier **必须**以 `group.` 开头，且**必须**就叫 `group.com.sbraveyoung.vpn` —— 代码里写死的常量，改名要同步改 [Sources/VPNApp/AppGroupStorage.swift](../Sources/VPNApp/AppGroupStorage.swift) 第 15 行。
+> Identifier **必须**以 `group.` 开头，且**必须**就叫 `group.com.sbraveyoung.qingzhou` —— 代码里写死的常量，改名要同步改 [Sources/QingzhouApp/AppGroupStorage.swift](../Sources/QingzhouApp/AppGroupStorage.swift) 第 15 行。
 
 ### A3. 把 App Group 绑到 4 个 Bundle ID
 
 回 Identifiers 列表，**逐个**点开上面 4 个 Bundle ID：
 
 1. 找到 `App Groups` 那行 → 点 `Configure`
-2. 勾上 `group.com.sbraveyoung.vpn`
+2. 勾上 `group.com.sbraveyoung.qingzhou`
 3. Continue → Save
 
 ### A4.（拿到 entitlement 邮件后）勾上 Network Extensions
@@ -109,7 +109,7 @@ gomobile bind -v \
   -target=ios,iossimulator,macos \
   -ldflags='-s -w' \
   -tags='with_clash_api,with_quic,with_wireguard,with_utls,with_gvisor,with_dhcp,with_ech' \
-  -o ~/code/github.com/sbraveyoung/vpn/Frameworks/SingBox.xcframework \
+  -o ~/code/src/github.com/sbraveyoung/qingzhou/Frameworks/SingBox.xcframework \
   ./experimental/libbox
 ```
 
@@ -118,7 +118,7 @@ gomobile bind -v \
 ### B4. 验证产物
 
 ```bash
-cd ~/code/github.com/sbraveyoung/vpn
+cd ~/code/src/github.com/sbraveyoung/qingzhou
 ls -la Frameworks/SingBox.xcframework
 # 应该看到一个 ~80-120 MB 的目录，含 ios-arm64 / ios-arm64_x86_64-simulator / macos-arm64_x86_64 三个子目录
 ```
@@ -149,7 +149,7 @@ A4 邮件 + B4 产物都到位之后，告诉我，我做这几件事：
 ## 你现在的 checklist
 
 - [ ] A1. 注册 4 个 Bundle ID
-- [ ] A2. 创建 App Group `group.com.sbraveyoung.vpn`
+- [ ] A2. 创建 App Group `group.com.sbraveyoung.qingzhou`
 - [ ] A3. 把 App Group 绑到 4 个 Bundle ID
 - [ ] 提交 / 跟进 Packet Tunnel entitlement 申请（路径见 [BUILD.md](BUILD.md) 或最近一次对话回复）
 - [ ] B. 跑 `gomobile bind` 出 SingBox.xcframework

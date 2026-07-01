@@ -16,7 +16,7 @@
 ## App Group —— appex ↔ 主 App 通信的地基
 
 - id：`group.com.sbraveyoung.qingzhou`
-- 配在 `project.yml` **4 个 target**（VPN-iOS / VPN-macOS / VPN-Tunnel-iOS / VPN-Tunnel-macOS）的 `entitlements.properties`
+- 配在 `project.yml` **4 个 target**（Qingzhou-iOS / Qingzhou-macOS / Qingzhou-Tunnel-iOS / Qingzhou-Tunnel-macOS）的 `entitlements.properties`
 - 用途：流量统计（`traffic-stats.json`）+ xray access log 都靠它在扩展进程和主 App 之间共享
 - **没配好 → 流量波形、连接列表、域名分析全部无数据**（appex 写不进、主 App 读不到，容器是 nil）
 - Apple 后台还要：两个 App ID 都 **Edit/关联** 到这个 group，再刷新 provisioning profile
@@ -25,7 +25,7 @@
 
 - `PacketTunnelProvider.swift` 等在 Xcode target 里，`swift build` / `swift test` **覆盖不到**，改了只能 Xcode 编
 - **必须真机验证** —— VPN 扩展在模拟器跑不了
-- ⌘R 跑 **VPN-iOS** 会自动连带编译内嵌的 VPN-Tunnel-iOS（`embed: true`），不用单独 build tunnel
+- ⌘R 跑 **Qingzhou-iOS** 会自动连带编译内嵌的 Qingzhou-Tunnel-iOS（`embed: true`），不用单独 build tunnel
 - 装完要**关开一次 VPN**，运行中的旧扩展进程才会换成新代码
 - Xcode 的 Swift 6 strict concurrency 比命令行严，容易在这里才暴露：闭包捕获可变变量、
   定时器和阻塞 read 循环共用一个串行队列被饿死（导致速率算错）等
@@ -49,5 +49,5 @@
 ```bash
 swift test                       # 纯 Swift 包（VPNCore/VPNApp/XrayConfig...），编不到 appex
 cd Apps && xcodegen generate     # 改了 project.yml / 加删源文件后重新生成工程
-open Apps/VPN.xcodeproj          # ⌘R 跑 VPN-iOS（真机）或 VPN-macOS
+open Apps/Qingzhou.xcodeproj          # ⌘R 跑 Qingzhou-iOS（真机）或 Qingzhou-macOS
 ```

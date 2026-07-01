@@ -128,7 +128,7 @@
 - 付费 Apple Developer 账号
 - Network Extensions capability 自助启用
 - 4 个 Bundle ID 注册
-- App Group `group.com.sbraveyoung.vpn` 创建并绑定到 4 个 ID
+- App Group `group.com.sbraveyoung.qingzhou` 创建并绑定到 4 个 ID
 
 🎯 **S2 代码已完成 (2026-05-17)** —— 详细测试步骤见 [S2-TESTING.md](S2-TESTING.md)。
 - `Sources/XrayCore/TunnelAppGroup.swift`：主 App ↔ Extension 共享 xray JSON 的 helper
@@ -136,8 +136,8 @@
   - `setTunnelNetworkSettings(IP=10.0.10.1/24, DNS=8.8.8.8/1.1.1.1, MTU=1500)`
   - 从 NEPacketTunnelFlow 通过 KVC 拿 `socket.fileDescriptor`
   - `XrayCore.setTunFd(fd)` + `XrayCore.run(configJSON: ..., geoDir: ..., mphCachePath: ...)`
-- `Sources/VPNCore/NodeEncoder.swift`：Node → 分享链接字符串
-- `Sources/VPNApp/AppState.startTunnel()`：Node → share link → xray JSON → AppGroup → 启动 Extension
+- `Sources/QingzhouCore/NodeEncoder.swift`：Node → 分享链接字符串
+- `Sources/QingzhouApp/AppState.startTunnel()`：Node → share link → xray JSON → AppGroup → 启动 Extension
 - 验证：iOS + macOS + Tunnel.appex 都 BUILD SUCCEEDED，116 单测全过
 
 ⏭️ **真机调试在你那边**：见 [S2-TESTING.md](S2-TESTING.md) 一步步跑。跑通了进 S3。

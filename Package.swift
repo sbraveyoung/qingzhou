@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "VPN",
+    name: "Qingzhou",
     platforms: [
         .iOS(.v17),
         .macOS(.v14)
     ],
     products: [
-        .library(name: "VPNCore",         targets: ["VPNCore"]),
-        .library(name: "VPNProtocols",    targets: ["VPNProtocols"]),
-        .library(name: "VPNSubscription", targets: ["VPNSubscription"]),
-        .library(name: "VPNRules",        targets: ["VPNRules"]),
-        .library(name: "VPNSpeedTest",    targets: ["VPNSpeedTest"]),
-        .library(name: "VPNLogging",      targets: ["VPNLogging"]),
-        .library(name: "VPNApp",          targets: ["VPNApp"]),
+        .library(name: "QingzhouCore",         targets: ["QingzhouCore"]),
+        .library(name: "QingzhouProtocols",    targets: ["QingzhouProtocols"]),
+        .library(name: "QingzhouSubscription", targets: ["QingzhouSubscription"]),
+        .library(name: "QingzhouRules",        targets: ["QingzhouRules"]),
+        .library(name: "QingzhouSpeedTest",    targets: ["QingzhouSpeedTest"]),
+        .library(name: "QingzhouLogging",      targets: ["QingzhouLogging"]),
+        .library(name: "QingzhouApp",          targets: ["QingzhouApp"]),
         .library(name: "XrayConfig",      targets: ["XrayConfig"]),
         .library(name: "XrayCore",        targets: ["XrayCore"])
     ],
@@ -23,24 +23,24 @@ let package = Package(
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0")
     ],
     targets: [
-        .target(name: "VPNCore"),
+        .target(name: "QingzhouCore"),
         .target(
-            name: "VPNProtocols",
+            name: "QingzhouProtocols",
             dependencies: [
-                "VPNCore",
+                "QingzhouCore",
                 .product(name: "Yams", package: "Yams")
             ]
         ),
-        .target(name: "VPNSubscription", dependencies: ["VPNCore", "VPNProtocols", "VPNLogging"]),
-        .target(name: "VPNRules",        dependencies: ["VPNCore", "VPNLogging"]),
-        .target(name: "VPNSpeedTest",    dependencies: ["VPNCore", "VPNLogging"]),
-        .target(name: "VPNLogging",      dependencies: ["VPNCore"]),
+        .target(name: "QingzhouSubscription", dependencies: ["QingzhouCore", "QingzhouProtocols", "QingzhouLogging"]),
+        .target(name: "QingzhouRules",        dependencies: ["QingzhouCore", "QingzhouLogging"]),
+        .target(name: "QingzhouSpeedTest",    dependencies: ["QingzhouCore", "QingzhouLogging"]),
+        .target(name: "QingzhouLogging",      dependencies: ["QingzhouCore"]),
         .target(
-            name: "VPNApp",
+            name: "QingzhouApp",
             dependencies: [
-                "VPNCore", "VPNProtocols", "VPNSubscription",
-                "VPNRules", "VPNSpeedTest", "VPNLogging"
-                // VPNApp 故意不依赖 XrayCore —— XrayCore 拖入 LibXray.xcframework（85 MB
+                "QingzhouCore", "QingzhouProtocols", "QingzhouSubscription",
+                "QingzhouRules", "QingzhouSpeedTest", "QingzhouLogging"
+                // QingzhouApp 故意不依赖 XrayCore —— XrayCore 拖入 LibXray.xcframework（85 MB
                 // Go runtime），dyld 在主 App 启动时强制加载完才进 main()，会黑屏 1–3 秒。
                 // share link → 完整 xray 配置 的转换挪到了 Extension 里做，
                 // 见 Apps/Tunnel-Shared/PacketTunnelProvider.swift。
@@ -50,15 +50,15 @@ let package = Package(
         // XrayConfig: 把 Node 转成 xray-core 的 outbound JSON，再加上 inbound / routing / dns
         // 包装成完整 xray 配置。**不依赖 LibXray**（纯 Swift），所以可以在主 App 和单测里用，
         // 不会拖进 85 MB Go runtime。
-        .target(name: "XrayConfig", dependencies: ["VPNCore"]),
+        .target(name: "XrayConfig", dependencies: ["QingzhouCore"]),
 
-        .testTarget(name: "VPNCoreTests",         dependencies: ["VPNCore"]),
-        .testTarget(name: "VPNProtocolsTests",    dependencies: ["VPNProtocols"]),
-        .testTarget(name: "VPNSubscriptionTests", dependencies: ["VPNSubscription"]),
-        .testTarget(name: "VPNRulesTests",        dependencies: ["VPNRules"]),
-        .testTarget(name: "VPNSpeedTestTests",    dependencies: ["VPNSpeedTest"]),
-        .testTarget(name: "VPNLoggingTests",      dependencies: ["VPNLogging"]),
-        .testTarget(name: "VPNAppTests",          dependencies: ["VPNApp"]),
+        .testTarget(name: "QingzhouCoreTests",         dependencies: ["QingzhouCore"]),
+        .testTarget(name: "QingzhouProtocolsTests",    dependencies: ["QingzhouProtocols"]),
+        .testTarget(name: "QingzhouSubscriptionTests", dependencies: ["QingzhouSubscription"]),
+        .testTarget(name: "QingzhouRulesTests",        dependencies: ["QingzhouRules"]),
+        .testTarget(name: "QingzhouSpeedTestTests",    dependencies: ["QingzhouSpeedTest"]),
+        .testTarget(name: "QingzhouLoggingTests",      dependencies: ["QingzhouLogging"]),
+        .testTarget(name: "QingzhouAppTests",          dependencies: ["QingzhouApp"]),
         .testTarget(name: "XrayConfigTests",      dependencies: ["XrayConfig"]),
 
         // ─────────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ let package = Package(
         ),
         .target(
             name: "XrayCore",
-            dependencies: ["LibXray", "VPNCore", "VPNLogging", "XrayConfig"],
+            dependencies: ["LibXray", "QingzhouCore", "QingzhouLogging", "XrayConfig"],
             linkerSettings: [
                 // libXray 内部用 res_9_* DNS resolver API（Darwin libresolv）
                 .linkedLibrary("resolv")

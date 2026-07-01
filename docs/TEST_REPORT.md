@@ -32,13 +32,13 @@ Executed 113 tests, with 0 failures (0 unexpected) in 1.351 (1.377) seconds
 
 | 模块 | 测试数 | 失败 | 耗时 | 覆盖点 |
 |---|---:|---:|---:|---|
-| `VPNCoreTests` | 16 | 0 | 0.020s | 协议枚举、节点排序、订阅使用率、规则源文本、连接活跃判断、字节格式化、**Settings JSON 旧版本兼容性 (4)** |
-| `VPNLoggingTests` | 8 | 0 | 0.010s | 级别比较、环形缓冲淘汰、关键字 / 级别搜索、订阅回调、文件落盘 |
-| `VPNProtocolsTests` | 28 | 0 | 0.095s | trojan / ss / vmess / vless / hy2 全部成功 + 错误路径；**Clash YAML 解析 (13)**：检测、proxy-providers、各协议字段映射、未知 type 静默跳过、缺失字段错误收集、port 既支持数字又支持字符串 |
-| `VPNRulesTests` | 24 | 0 | 0.017s | IPv4 / IPv6 CIDR 解析与命中、所有规则类型解析、引擎匹配优先级、未命中兜底、关键字 / 类型搜索 |
-| `VPNSpeedTestTests` | 5 | 0 | 0.004s | 内置目标 URL 完整性、并发探针顺序保持、节点延迟排名、排除节点跳过、全失败时返回 nil |
-| `VPNSubscriptionTests` | 9 | 0 | 0.008s | base64 / 明文 / 无 padding 三种订阅体；userinfo header 完整 / 部分 / 含无效字段；fetcher 写回订阅元数据 |
-| `VPNAppTests` | 23 | 0 | 1.18s | 持久化 round-trip / 损坏文件恢复；远程规则拉取 + 错误传播；QR 生成；AppState 节点去重 / 批量添加 / 排除清空 / 订阅删除级联 / 自定义规则优先 / 调度器启停；**Locale 解析器 (4)** |
+| `QingzhouCoreTests` | 16 | 0 | 0.020s | 协议枚举、节点排序、订阅使用率、规则源文本、连接活跃判断、字节格式化、**Settings JSON 旧版本兼容性 (4)** |
+| `QingzhouLoggingTests` | 8 | 0 | 0.010s | 级别比较、环形缓冲淘汰、关键字 / 级别搜索、订阅回调、文件落盘 |
+| `QingzhouProtocolsTests` | 28 | 0 | 0.095s | trojan / ss / vmess / vless / hy2 全部成功 + 错误路径；**Clash YAML 解析 (13)**：检测、proxy-providers、各协议字段映射、未知 type 静默跳过、缺失字段错误收集、port 既支持数字又支持字符串 |
+| `QingzhouRulesTests` | 24 | 0 | 0.017s | IPv4 / IPv6 CIDR 解析与命中、所有规则类型解析、引擎匹配优先级、未命中兜底、关键字 / 类型搜索 |
+| `QingzhouSpeedTestTests` | 5 | 0 | 0.004s | 内置目标 URL 完整性、并发探针顺序保持、节点延迟排名、排除节点跳过、全失败时返回 nil |
+| `QingzhouSubscriptionTests` | 9 | 0 | 0.008s | base64 / 明文 / 无 padding 三种订阅体；userinfo header 完整 / 部分 / 含无效字段；fetcher 写回订阅元数据 |
+| `QingzhouAppTests` | 23 | 0 | 1.18s | 持久化 round-trip / 损坏文件恢复；远程规则拉取 + 错误传播；QR 生成；AppState 节点去重 / 批量添加 / 排除清空 / 订阅删除级联 / 自定义规则优先 / 调度器启停；**Locale 解析器 (4)** |
 
 ## 重点新增测试 (阶段 1.5+)
 
@@ -68,10 +68,10 @@ Executed 113 tests, with 0 failures (0 unexpected) in 1.351 (1.377) seconds
 | 目标 | 命令 | 结果 |
 |---|---|---|
 | macOS 14 (x86_64) lib | `swift build` | ✅ BUILD COMPLETE |
-| iOS 17 (arm64) lib | `xcodebuild -scheme VPN-Package -destination 'generic/platform=iOS'` | ✅ BUILD SUCCEEDED |
-| macOS App | `xcodebuild -scheme VPN-macOS` (XcodeGen-generated) | ✅ BUILD SUCCEEDED |
-| iOS Simulator App | `xcodebuild -scheme VPN-iOS -destination 'iOS Simulator'` | ✅ BUILD SUCCEEDED |
-| macOS App 实际启动 | `open VPN-macOS.app` | ✅ 进程起来，无 crash |
+| iOS 17 (arm64) lib | `xcodebuild -scheme Qingzhou-Package -destination 'generic/platform=iOS'` | ✅ BUILD SUCCEEDED |
+| macOS App | `xcodebuild -scheme Qingzhou-macOS` (XcodeGen-generated) | ✅ BUILD SUCCEEDED |
+| iOS Simulator App | `xcodebuild -scheme Qingzhou-iOS -destination 'iOS Simulator'` | ✅ BUILD SUCCEEDED |
+| macOS App 实际启动 | `open Qingzhou-macOS.app` | ✅ 进程起来，无 crash |
 | 持久化目录 | `~/Library/Application Support/VPN/` | ✅ 自动创建 |
 
 ## 已知未覆盖的部分
@@ -96,9 +96,9 @@ git clone <repo>
 cd vpn
 swift test                    # → Executed 113 tests, with 0 failures
 cd Apps && xcodegen generate
-xcodebuild -project VPN.xcodeproj -scheme VPN-macOS \
+xcodebuild -project Qingzhou.xcodeproj -scheme Qingzhou-macOS \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
-xcodebuild -project VPN.xcodeproj -scheme VPN-iOS \
+xcodebuild -project Qingzhou.xcodeproj -scheme Qingzhou-iOS \
   -destination 'generic/platform=iOS Simulator' \
   CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
 ```

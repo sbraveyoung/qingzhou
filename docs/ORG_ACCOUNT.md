@@ -86,7 +86,7 @@ D-U-N-S 必须有"合法商业实体"。三种思路:
 ### 2.3 注册成功后立刻做的事
 
 1. 把新 Team ID(类似 `UK7MME38H9` 这种 10 位字符串)记下来,这是新的开发团队 ID
-2. 在 App Store Connect 创建一个 App Record,Bundle ID 仍然是 `com.sbraveyoung.vpn.ios`(Bundle ID
+2. 在 App Store Connect 创建一个 App Record,Bundle ID 仍然是 `com.sbraveyoung.qingzhou.ios`(Bundle ID
    是全球唯一的,但**只跟一个开发者账号绑死** —— 如果你原来在 Individual 账号下也注册了同一个 ID,**先 unregister**)
 3. 把 Apps/project.yml 里 `DEVELOPMENT_TEAM` 改成新 Team ID,重跑 xcodegen
 4. 重新生成 Distribution profile

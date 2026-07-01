@@ -6,9 +6,9 @@
 // 里跑 —— Extension 进程独立加载 LibXray，跟主 App 启动无关。
 
 import SwiftUI
-import VPNApp
-import VPNLogging
-import VPNCore
+import QingzhouApp
+import QingzhouLogging
+import QingzhouCore
 
 @main
 struct VPNiOSApp: App {

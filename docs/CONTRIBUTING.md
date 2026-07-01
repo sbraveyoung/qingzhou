@@ -21,26 +21,26 @@ xcodebuild -scheme VPN-Package -destination 'generic/platform=iOS' build  # iOS 
 
 | 类型 | 放在 |
 |---|---|
-| 新协议（比如 ShadowTLS） | `VPNProtocols` |
-| 新规则类型 | `VPNRules` + `VPNCore.Rule` |
-| 新测速目标 | `VPNSpeedTest.SpeedTestTarget` |
-| 新 UI 视图 | `VPNApp` |
-| 新模型字段 | `VPNCore`（其他模块都不应该有自己的领域模型） |
+| 新协议（比如 ShadowTLS） | `QingzhouProtocols` |
+| 新规则类型 | `QingzhouRules` + `QingzhouCore.Rule` |
+| 新测速目标 | `QingzhouSpeedTest.SpeedTestTarget` |
+| 新 UI 视图 | `QingzhouApp` |
+| 新模型字段 | `QingzhouCore`（其他模块都不应该有自己的领域模型） |
 
-底层模块（VPNCore）**不能**依赖上层。如果你发现需要这么做，多半是抽象错位 —— 先讨论。
+底层模块（QingzhouCore）**不能**依赖上层。如果你发现需要这么做，多半是抽象错位 —— 先讨论。
 
 ## 加新协议解析器
 
-1. 在 `VPNCore/ProxyProtocol.swift` 注册新的 case + scheme。
-2. 在 `VPNProtocols/` 新建 `<Name>Parser.swift`，实现 `static func parse(_:) throws -> Node`。
-3. 在 `VPNProtocols/ProxyURLParser.swift` 的 switch 里加分发。
-4. 在 `Tests/VPNProtocolsTests/` 写至少 3 个测试：正常路径、缺字段错误、特殊字符 / URL-decode。
+1. 在 `QingzhouCore/ProxyProtocol.swift` 注册新的 case + scheme。
+2. 在 `QingzhouProtocols/` 新建 `<Name>Parser.swift`，实现 `static func parse(_:) throws -> Node`。
+3. 在 `QingzhouProtocols/ProxyURLParser.swift` 的 switch 里加分发。
+4. 在 `Tests/QingzhouProtocolsTests/` 写至少 3 个测试：正常路径、缺字段错误、特殊字符 / URL-decode。
 
 ## 加新规则类型
 
-1. `VPNCore/Rule.swift` 加 `RuleType` case。
-2. `VPNRules/RuleEngine.swift` 在 `match` 的 switch 里加分支；如果需要预编译（像 CIDR）那样，加到 `init` 里。
-3. `Tests/VPNRulesTests/` 加测试覆盖 hit / miss / 边界。
+1. `QingzhouCore/Rule.swift` 加 `RuleType` case。
+2. `QingzhouRules/RuleEngine.swift` 在 `match` 的 switch 里加分支；如果需要预编译（像 CIDR）那样，加到 `init` 里。
+3. `Tests/QingzhouRulesTests/` 加测试覆盖 hit / miss / 边界。
 
 ## PR 模板（建议）
 

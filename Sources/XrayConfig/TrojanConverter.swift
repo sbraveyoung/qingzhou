@@ -20,7 +20,7 @@
 // 在 share link 里 `security=none` 关掉。
 
 import Foundation
-import VPNCore
+import QingzhouCore
 
 enum TrojanConverter {
 

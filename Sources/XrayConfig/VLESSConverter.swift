@@ -25,7 +25,7 @@
 // - REALITY 是 vless 的常见伴生，参数 pbk/sid/spx 由 StreamSettingsBuilder.buildREALITYSettings 处理
 
 import Foundation
-import VPNCore
+import QingzhouCore
 
 enum VLESSConverter {
 

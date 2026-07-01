@@ -7,9 +7,9 @@
 // 同样，真要让代理工作需要 Network Extension Target 和 entitlements，详见 docs/BUILD.md。
 
 import SwiftUI
-import VPNApp
-import VPNLogging
-import VPNCore
+import QingzhouApp
+import QingzhouLogging
+import QingzhouCore
 
 @main
 struct VPNMacApp: App {

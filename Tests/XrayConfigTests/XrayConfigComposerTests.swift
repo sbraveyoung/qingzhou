@@ -1,5 +1,5 @@
 import XCTest
-import VPNCore
+import QingzhouCore
 @testable import XrayConfig
 
 final class XrayConfigComposerTests: XCTestCase {

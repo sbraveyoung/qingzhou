@@ -1,7 +1,7 @@
 import Foundation
 
-// 与主 App 侧 Sources/VPNCore/FilterIPC.swift 保持同名同签名。
-// XPC 按 @objc selector 匹配接口，两份一致即可，扩展不必依赖 VPNCore（保持精简）。
+// 与主 App 侧 Sources/QingzhouCore/FilterIPC.swift 保持同名同签名。
+// XPC 按 @objc selector 匹配接口，两份一致即可，扩展不必依赖 QingzhouCore（保持精简）。
 
 @objc protocol FilterControlProtocol {
     func fetchPortMap(reply: @escaping ([String: String]) -> Void)

@@ -12,12 +12,12 @@
 └────────────────────┬────────────────────────────────────┘
                      │ 依赖
 ┌────────────────────▼────────────────────────────────────┐
-│ VPNApp  (SwiftUI 视图 + AppState 协调器)                │
+│ QingzhouApp  (SwiftUI 视图 + AppState 协调器)                │
 └────┬────────┬────────┬─────────┬────────┬──────────┬────┘
      │        │        │         │        │          │
      ▼        ▼        ▼         ▼        ▼          ▼
 ┌────────┐┌─────────────┐┌─────────┐┌──────────┐┌─────────┐
-│VPNCore ││VPNProtocols ││VPNRules ││VPNSpeed- ││VPNLog-  │
+│QingzhouCore ││QingzhouProtocols ││QingzhouRules ││VPNSpeed- ││VPNLog-  │
 │模型    ││链接解析     ││引擎     ││Test 探针 ││ging     │
 └────────┘└─────────────┘└─────────┘└──────────┘└─────────┘
               ▲
@@ -28,19 +28,19 @@
         └─────────────┘
 ```
 
-依赖方向只能从上往下；同层之间不互相依赖。`VPNCore` 是唯一被所有模块引入的基础库。
+依赖方向只能从上往下；同层之间不互相依赖。`QingzhouCore` 是唯一被所有模块引入的基础库。
 
 ## 各模块职责
 
-### VPNCore
+### QingzhouCore
 - **职责**：协议无关的领域模型 —— `Node`、`Subscription`、`Rule`、`Connection`、`Settings`。
 - **不包含**：任何 IO、SwiftUI、协议解析逻辑。
 - **重要类型**：
   - `Node`：节点身份指纹（`identityFingerprint`）用于订阅刷新去重 / 保留测速结果。
   - `Rule`：源文本形式由 `lineForm` 渲染，与 `RuleParser.parseLine` 是 round-trip。
-  - `Subscription`：流量 / 到期由 `SubscriptionUserInfo` 在 VPNSubscription 写入。
+  - `Subscription`：流量 / 到期由 `SubscriptionUserInfo` 在 QingzhouSubscription 写入。
 
-### VPNProtocols
+### QingzhouProtocols
 - **职责**：节点链接 ↔ `Node` 互转。
 - 单一入口 `ProxyURLParser.parse(_:)`，按 URL scheme 分发到 `TrojanParser` / `ShadowsocksParser` / `VMessParser` / `VLESSParser` / `Hysteria2Parser`。
 - Shadowsocks 同时支持 SIP002（user-info base64 + host:port）和 legacy（整段 base64）两种格式；
@@ -48,32 +48,32 @@
 - VMess 解析鲁棒对待 port / aid 既可为 number 又可为 string 的现实。
 - **Clash YAML 配置导入**：`ClashConfigParser` 通过 [Yams](https://github.com/jpsim/Yams) 解析 YAML，把 `proxies:` 和 `proxy-providers.*.payload:` 都映射成 `[Node]`；不支持的协议类型（snell / ssr / http / socks5...）静默跳过，不算错误。
 
-### VPNSubscription
+### QingzhouSubscription
 - **职责**：拉取订阅 → 解析为节点列表 + 流量元数据。
 - `HTTPClient` 是 protocol，默认实现 `URLSessionHTTPClient`；单测里用 `MockHTTPClient` 避免真实出网。
 - `SubscriptionParser` 是纯函数（无 IO），便于离线测试；`SubscriptionFetcher` 是 actor，把网络 + 解析 + 日志串起来。
 - `SubscriptionUserInfo` 解析 `Subscription-Userinfo` 响应头，分隔符兼容 `;` 和 `,`，字段缺失时部分填充。
 
-### VPNRules
+### QingzhouRules
 - **职责**：规则源文本 → 结构化规则 → 匹配引擎。
 - `CIDR.swift` 是自包含的 IPv4 / IPv6 CIDR 实现 —— 不调 `inet_pton`，便于 Linux 跨平台。
 - IPv6 解析支持 `::` 缩写；不支持 IPv4-mapped 混合写法（这个在主流规则集里也罕见）。
 - `GeoIPResolver` 是 protocol，生产环境注入 MaxMind / mmdb 实现；默认 `NoopGeoIPResolver` 让 GEOIP 规则永远不命中（不会误判）。
 - 匹配按规则顺序遍历，命中即返回；没有 `FINAL` 时默认 `DIRECT`（保守策略，避免意外把所有流量推到代理）。
 
-### VPNSpeedTest
+### QingzhouSpeedTest
 - **职责**：URL 延迟探测 + 节点择优。
 - `LatencyProber` 是 protocol，默认实现用 `URLSession.HEAD`。
 - `SpeedTestRunner` 把多个目标并发跑（`withTaskGroup`），结果按传入顺序返回，便于 UI 渲染。
 - `NodeSelector.measure` 用同样的探针测每个非排除节点的 host:port 连接耗时（不是端到端通过代理的速度 —— 后者要等阶段 2 接入 PacketTunnel 才能做）；`pickBest` 在结果里挑延迟最低的。
 
-### VPNLogging
+### QingzhouLogging
 - **职责**：分级日志 + 环形缓冲 + 文件落盘 + 订阅事件。
 - 用 `NSLock`，不用 actor。原因：日志器经常被同步上下文调用（包括未来的 PacketTunnel 包回调），让 `log()` 变 async 会传染整个调用链。
 - 环形缓冲达到容量后丢最老 —— UI 展示用；归档要走文件 sink。
 - 文件 sink 是简单 append-only，每行一条 ISO8601 时间戳 + level + category + message。
 
-### VPNApp
+### QingzhouApp
 - **职责**：SwiftUI 视图层 + `AppState` 协调器。
 - `AppState` 用 `@Observable` 宏（iOS 17 / macOS 14 起的现代 Observation 框架）；`@MainActor` 标记，避免后台线程改 UI 状态。
 - 视图按业务划分：`HomeView` / `NodesView` / `SubscriptionsView` / `RulesView` / `ConnectionsView` / `LogsView` / `SettingsView`，外加 macOS 专属的 `StatusBarMenu`。
@@ -91,7 +91,7 @@
    gomobile bind -target=ios,iossimulator,macos -o SingBox.xcframework \
      github.com/sagernet/sing-box/experimental/libbox
    ```
-   把产物放到 `Frameworks/SingBox.xcframework`，新建 `VPNCore-SingBox` 模块作为 Swift 与 Go 的胶水层。
+   把产物放到 `Frameworks/SingBox.xcframework`，新建 `QingzhouCore-SingBox` 模块作为 Swift 与 Go 的胶水层。
 2. **Packet Tunnel Provider**。新建 `Network Extension` target；继承 `NEPacketTunnelProvider`；通过 App Group 共享配置文件和共享内存（连接列表）。
 3. **主 App ↔ Extension 通信**。`NETunnelProviderManager` 启动隧道；自定义 control message（`sendProviderMessage`）实时拉取连接、流量、当前规则命中。
 4. **macOS 系统代理 / 开机自启**。前者改 `networksetup -setwebproxy`；后者用 `SMAppService.mainApp` (macOS 13+)。

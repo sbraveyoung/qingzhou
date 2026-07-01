@@ -25,7 +25,7 @@
 // 这两个完全独立，新人最容易搞混。
 
 import Foundation
-import VPNCore
+import QingzhouCore
 
 enum VMessConverter {
 

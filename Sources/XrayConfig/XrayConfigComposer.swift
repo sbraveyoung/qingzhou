@@ -14,7 +14,7 @@
 // 发现这个坑。
 
 import Foundation
-import VPNCore
+import QingzhouCore
 
 public enum XrayConfigComposer {
 

@@ -3,12 +3,12 @@
 ## 作为库使用（最快上手）
 
 ```swift
-import VPNCore
-import VPNProtocols
-import VPNSubscription
-import VPNRules
-import VPNSpeedTest
-import VPNLogging
+import QingzhouCore
+import QingzhouProtocols
+import QingzhouSubscription
+import QingzhouRules
+import QingzhouSpeedTest
+import QingzhouLogging
 
 // 1. 解析单个节点链接
 let node = try ProxyURLParser.parse("trojan://pw@example.com:443#HK")

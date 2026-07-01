@@ -22,7 +22,7 @@ import Darwin
 import NetworkExtension
 import os
 import os.log
-import VPNCore
+import QingzhouCore
 import XrayConfig
 import XrayCore
 

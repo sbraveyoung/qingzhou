@@ -16,7 +16,7 @@
 //   - ALPN: `alpn` 逗号分隔
 
 import Foundation
-import VPNCore
+import QingzhouCore
 
 enum StreamSettingsBuilder {
 

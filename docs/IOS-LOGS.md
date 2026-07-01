@@ -1,7 +1,7 @@
 # iOS 真机调试日志抓取
 
 > 用来诊断 #3 类问题：「打开 VPN 开关 → 系统设置看 VPN toggle 自动关闭」。
-> 这种症状是 `saveToPreferences` 成功但 Extension（`VPN-Tunnel-iOS.appex`）启动失败 →
+> 这种症状是 `saveToPreferences` 成功但 Extension（`Qingzhou-Tunnel-iOS.appex`）启动失败 →
 > 系统标 connection failed → toggle 显示为 off。要看到具体错在哪，必须抓 Extension 那个进程的日志。
 
 ## 方法 1（推荐）：Mac 上的 Console.app
@@ -9,7 +9,7 @@
 1. iPhone 用数据线连 Mac（**保持插着**，否则日志流断）
 2. Mac 打开 `应用程序 → 实用工具 → 控制台`（或 Spotlight 搜 `Console.app`）
 3. 左边设备栏选你的 iPhone
-4. 顶部搜索框输入 `com.sbraveyoung.vpn` —— 把 app 和 Extension 的日志都过滤出来
+4. 顶部搜索框输入 `com.sbraveyoung.qingzhou` —— 把 app 和 Extension 的日志都过滤出来
 5. 顶部点 **开始流式传输**
 6. **回到 iPhone**，按下 VPN 开关
 7. 等 5–10 秒，回到 Mac，**按 ⌘C 停止流**，把日志全选 ⌘A 复制
@@ -37,14 +37,14 @@ Xcode → `Window` → `Devices and Simulators` → 选 iPhone → 右下点 `Op
 
 `设置 → 隐私与安全性 → 分析与改进 → 分析数据`
 
-找文件名含 `VPN-Tunnel-iOS` 的，点开看。注意 `Termination Reason: PER-PROCESS-LIMIT` 就是 OOM。
+找文件名含 `Qingzhou-Tunnel-iOS` 的，点开看。注意 `Termination Reason: PER-PROCESS-LIMIT` 就是 OOM。
 
 ## 方法 4：导出 xray 配置 dump
 
 Extension 启动失败时会把生成的 xray JSON 写到 Caches `xray-config-dump.json`。
 这个目录在 Extension 沙箱里，正常情况下没办法直接拿出来。但如果在 Mac 上跑：
 ```bash
-log show --predicate 'subsystem CONTAINS "com.sbraveyoung.vpn"' --info --last 5m \
+log show --predicate 'subsystem CONTAINS "com.sbraveyoung.qingzhou"' --info --last 5m \
   | grep "dumped failing config"
 ```
 能看到具体路径（虽然取不出来）。
@@ -55,7 +55,7 @@ log show --predicate 'subsystem CONTAINS "com.sbraveyoung.vpn"' --info --last 5m
 
 ```
 == Console.app 日志 ==
-<粘贴 30-50 行带 com.sbraveyoung.vpn 的日志>
+<粘贴 30-50 行带 com.sbraveyoung.qingzhou 的日志>
 
 == 系统设置 → 网络 → VPN 看到的状态 ==
 <截图或描述>

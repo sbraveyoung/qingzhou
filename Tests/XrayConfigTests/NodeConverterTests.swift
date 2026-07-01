@@ -1,5 +1,5 @@
 import XCTest
-import VPNCore
+import QingzhouCore
 @testable import XrayConfig
 
 /// Node → xray outbound JSON 转换器的单测。
@@ -237,7 +237,7 @@ final class NodeConverterTests: XCTestCase {
     }
 
     /// reality 节点里带 flow=xtls-rprx-vision + 完整 realitySettings 的形态校验。
-    /// （分享链接 → Node 的端到端解析在 VPNProtocolsTests 里覆盖，这里只测 Node → outbound。）
+    /// （分享链接 → Node 的端到端解析在 QingzhouProtocolsTests 里覆盖，这里只测 Node → outbound。）
     func testVLESSREALITYWithSpiderXAndTCP() throws {
         let node = Node(
             name: "reality", protocolType: .vless,

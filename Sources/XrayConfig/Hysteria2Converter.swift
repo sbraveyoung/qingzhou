@@ -36,7 +36,7 @@
 //   的节点这条路只能当普通 hy2 跑（多写的 key xray 会忽略），真要 obfs 暂不支持。
 
 import Foundation
-import VPNCore
+import QingzhouCore
 
 enum Hysteria2Converter {
 

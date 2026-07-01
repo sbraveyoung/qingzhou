@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一键构建 + 安装 VPN-macOS.app 到 /Applications。
+# 一键构建 + 安装 Qingzhou-macOS.app 到 /Applications。
 #
 # 用法：
 #   ./install.sh              # ad-hoc 签名（默认；UI 能跑；VPN 开关会报 permission denied）
@@ -18,7 +18,7 @@ fi
 
 # 1) 停掉正在跑的 app
 echo "==> Stopping any running instance"
-killall VPN-macOS 2>/dev/null || true
+killall Qingzhou-macOS 2>/dev/null || true
 
 # 2) 重新生成 Xcode 工程
 echo "==> Regenerating Xcode project"
@@ -33,7 +33,7 @@ if [ "$SIGNED_MODE" = "1" ]; then
   echo "==> Building Release (Apple Developer signed; needs Xcode logged into Apple ID)"
   # -allowProvisioningUpdates 让 xcodebuild 在 profile 缺失时自动创建
   # Team ID 从 project.yml 来；这里再保险写一遍
-  xcodebuild -project VPN.xcodeproj -scheme VPN-macOS \
+  xcodebuild -project Qingzhou.xcodeproj -scheme Qingzhou-macOS \
     -configuration Release \
     -derivedDataPath "$BUILD_DIR" \
     -allowProvisioningUpdates \
@@ -41,15 +41,15 @@ if [ "$SIGNED_MODE" = "1" ]; then
     build 2>&1 | tail -5
 else
   echo "==> Building Release (ad-hoc; VPN tunnel won't work — use --signed for real VPN)"
-  xcodebuild -project VPN.xcodeproj -scheme VPN-macOS \
+  xcodebuild -project Qingzhou.xcodeproj -scheme Qingzhou-macOS \
     -configuration Release \
     -derivedDataPath "$BUILD_DIR" \
     CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
     build 2>&1 | tail -3
 fi
 
-APP_SRC="$BUILD_DIR/Build/Products/Release/VPN-macOS.app"
-APP_DST="/Applications/VPN-macOS.app"
+APP_SRC="$BUILD_DIR/Build/Products/Release/Qingzhou-macOS.app"
+APP_DST="/Applications/Qingzhou-macOS.app"
 
 if [ ! -d "$APP_SRC" ]; then
   echo "ERROR: build artifact not found at $APP_SRC" >&2
@@ -59,7 +59,7 @@ fi
 # 4) 装到 /Applications
 echo "==> Installing to $APP_DST"
 if [ ! -w /Applications ]; then
-  APP_DST="$HOME/Applications/VPN-macOS.app"
+  APP_DST="$HOME/Applications/Qingzhou-macOS.app"
   mkdir -p "$HOME/Applications"
 fi
 rm -rf "$APP_DST"
@@ -73,13 +73,13 @@ echo "==> Launching"
 open "$APP_DST"
 
 sleep 1
-PID=$(pgrep -f VPN-macOS | head -1 || true)
+PID=$(pgrep -f Qingzhou-macOS | head -1 || true)
 if [ -n "${PID:-}" ]; then
   echo "==> Done. PID=$PID  →  $APP_DST"
   if [ "$SIGNED_MODE" = "1" ]; then
     cat <<EOF
 
-    🔐 第一次开 VPN 开关时 macOS 会弹「VPN-macOS 想要添加 VPN 配置 / 输入密码」
+    🔐 第一次开 VPN 开关时 macOS 会弹「Qingzhou-macOS 想要添加 VPN 配置 / 输入密码」
     输入你的 Mac 登录密码 → 允许
     之后如果还报 permission denied，去：
       系统设置 → 隐私与安全性 → 最下面有"VPN 配置已被阻止"红字 → 点"允许"

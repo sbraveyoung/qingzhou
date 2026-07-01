@@ -14,7 +14,7 @@
 // 之后 XrayConfigComposer 在这个 outbounds 数组外面套上 tun inbound + routing + dns。
 
 import Foundation
-import VPNCore
+import QingzhouCore
 
 public enum NodeConverterError: Swift.Error, LocalizedError, Equatable {
     case missingPassword

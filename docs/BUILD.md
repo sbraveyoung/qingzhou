@@ -23,7 +23,7 @@ swift build -c release   # Release
 
 ```bash
 swift test               # 跑全部 73 个单测
-swift test --filter VPNRulesTests          # 跑某个 target
+swift test --filter QingzhouRulesTests          # 跑某个 target
 swift test --parallel                      # 并行（默认就是并行）
 ```
 
@@ -32,11 +32,11 @@ swift test --parallel                      # 并行（默认就是并行）
 ### iOS（device + simulator）
 
 ```bash
-xcodebuild -scheme VPN-Package \
+xcodebuild -scheme Qingzhou-Package \
   -destination 'generic/platform=iOS' \
   -derivedDataPath .build/iOS-derived build
 
-xcodebuild -scheme VPN-Package \
+xcodebuild -scheme Qingzhou-Package \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath .build/iOS-sim-derived build
 ```
@@ -49,10 +49,10 @@ swift build              # 等价
 
 ### Linux（核心库部分）
 
-`VPNCore` / `VPNProtocols` / `VPNSubscription` / `VPNRules` / `VPNSpeedTest` / `VPNLogging` 不依赖 SwiftUI 与 AppKit/UIKit，理论上能在 Linux 上编译（CI 用得到）。`VPNApp` 因为引入了 SwiftUI 不能在 Linux 上编译。
+`QingzhouCore` / `QingzhouProtocols` / `QingzhouSubscription` / `QingzhouRules` / `QingzhouSpeedTest` / `QingzhouLogging` 不依赖 SwiftUI 与 AppKit/UIKit，理论上能在 Linux 上编译（CI 用得到）。`QingzhouApp` 因为引入了 SwiftUI 不能在 Linux 上编译。
 
 ```bash
-# 在 Linux 上需要修改 Package.swift，去掉 VPNApp target 和它的测试。
+# 在 Linux 上需要修改 Package.swift，去掉 QingzhouApp target 和它的测试。
 ```
 
 ## 集成进 iOS / macOS App
@@ -63,10 +63,10 @@ swift build              # 等价
 brew install xcodegen     # 一次性安装
 cd Apps
 xcodegen generate
-open VPN.xcodeproj        # iOS / macOS 两个 target 都在里面
+open Qingzhou.xcodeproj        # iOS / macOS 两个 target 都在里面
 ```
 
-Schemes：`VPN-iOS`、`VPN-macOS`。详细的真机调试 / 签名 / Bundle ID 修改步骤见 [../Apps/README.md](../Apps/README.md)。
+Schemes：`Qingzhou-iOS`、`Qingzhou-macOS`。详细的真机调试 / 签名 / Bundle ID 修改步骤见 [../Apps/README.md](../Apps/README.md)。
 
 ## 启用真正的 VPN 隧道（阶段 2 工作）
 
@@ -105,7 +105,7 @@ gomobile bind -target=ios,iossimulator,macos \
 
 ```swift
 import NetworkExtension
-import VPNCore
+import QingzhouCore
 
 final class PacketTunnelProvider: NEPacketTunnelProvider {
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {

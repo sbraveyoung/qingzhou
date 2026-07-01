@@ -1,6 +1,6 @@
-# XcodeGen 配置。修改后跑 `xcodegen generate` 重新生成 VPN.xcodeproj。
+# XcodeGen 配置。修改后跑 `xcodegen generate` 重新生成 Qingzhou.xcodeproj。
 # 注意：生成的 .xcodeproj 不要 commit，本仓库 .gitignore 已经忽略。
-name: VPN
+name: Qingzhou
 options:
   bundleIdPrefix: com.sbraveyoung
   createIntermediateGroups: true
@@ -12,7 +12,7 @@ options:
 
 # 本地 SPM 包引用 —— 路径是相对于 project.yml 所在目录
 packages:
-  VPN:
+  Qingzhou:
     path: ..
 
 settings:
@@ -25,7 +25,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
 
 targets:
-  VPN-iOS:
+  Qingzhou-iOS:
     type: application
     platform: iOS
     sources:
@@ -52,7 +52,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         DEVELOPMENT_TEAM: UK7MME38H9
     entitlements:
-      path: iOS/Resources/VPN-iOS.entitlements
+      path: iOS/Resources/Qingzhou-iOS.entitlements
       properties:
         # 让主 App 能管理 Personal VPN 配置 —— 启停 Packet Tunnel Extension 必需
         com.apple.developer.networking.networkextension:
@@ -63,20 +63,20 @@ targets:
         com.apple.security.application-groups:
           - group.com.sbraveyoung.qingzhou
     dependencies:
-      - package: VPN
-        product: VPNApp
-      - package: VPN
-        product: VPNCore
-      - package: VPN
-        product: VPNLogging
+      - package: Qingzhou
+        product: QingzhouApp
+      - package: Qingzhou
+        product: QingzhouCore
+      - package: Qingzhou
+        product: QingzhouLogging
       # 主 App 不再 link XrayCore —— 那会拖进 LibXray.xcframework（85 MB Go runtime），
       # 让 dyld 在启动时多花 1–3 秒。share link → xray 配置的转换挪到了 Extension。
       # PacketTunnel Extension：嵌入到 App，等 entitlement 批复后真机才能跑
-      - target: VPN-Tunnel-iOS
+      - target: Qingzhou-Tunnel-iOS
         embed: true
         codeSign: true
 
-  VPN-macOS:
+  Qingzhou-macOS:
     type: application
     platform: macOS
     sources:
@@ -97,7 +97,7 @@ targets:
         # 缺了激活会报 OSSystemExtensionErrorDomain #9 validationFailed。
         NSSystemExtensionUsageDescription: 轻舟需要安装网络扩展，用于标注每条连接由哪个 App 发起（仅本机分析，不上传）。
     entitlements:
-      path: macOS/Resources/VPN.entitlements
+      path: macOS/Resources/Qingzhou.entitlements
       properties:
         # App Sandbox 上架必须 true，调试期想绕过沙箱限制可改 false
         com.apple.security.app-sandbox: true
@@ -117,20 +117,20 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         DEVELOPMENT_TEAM: UK7MME38H9
     dependencies:
-      - package: VPN
-        product: VPNApp
-      - package: VPN
-        product: VPNCore
-      - package: VPN
-        product: VPNLogging
+      - package: Qingzhou
+        product: QingzhouApp
+      - package: Qingzhou
+        product: QingzhouCore
+      - package: Qingzhou
+        product: QingzhouLogging
       # 主 App 不再 link XrayCore —— 那会拖进 LibXray.xcframework（85 MB Go runtime），
       # 让 dyld 在启动时多花 1–3 秒。share link → xray 配置的转换挪到了 Extension。
       # PacketTunnel Extension：嵌入到 App，等 entitlement 批复后才能签真机
-      - target: VPN-Tunnel-macOS
+      - target: Qingzhou-Tunnel-macOS
         embed: true
         codeSign: true
       # Content Filter 扩展：给连接标注来源 App（需 content-filter-provider entitlement 特批）
-      - target: VPN-Filter-macOS
+      - target: Qingzhou-Filter-macOS
         embed: true
         codeSign: true
 
@@ -141,7 +141,7 @@ targets:
   # 这两个 target 当前能编过；要在真机上签名运行，必须先拿到 Apple 的
   # `packet-tunnel-provider` entitlement 批复。
   # ===========================================================================
-  VPN-Tunnel-iOS:
+  Qingzhou-Tunnel-iOS:
     type: app-extension
     platform: iOS
     sources:
@@ -169,16 +169,16 @@ targets:
         DEVELOPMENT_TEAM: UK7MME38H9
         SWIFT_VERSION: "6.0"
     dependencies:
-      - package: VPN
+      - package: Qingzhou
         product: XrayCore
-      # Extension 里要用 VPNCore.ProxyMode（share link → xray 配置转换在这里做）。
-      - package: VPN
-        product: VPNCore
+      # Extension 里要用 QingzhouCore.ProxyMode（share link → xray 配置转换在这里做）。
+      - package: Qingzhou
+        product: QingzhouCore
       # XrayConfigComposer 现在住在 XrayConfig（纯 Swift，不拖 LibXray）。
-      - package: VPN
+      - package: Qingzhou
         product: XrayConfig
 
-  VPN-Tunnel-macOS:
+  Qingzhou-Tunnel-macOS:
     type: app-extension
     platform: macOS
     sources:
@@ -210,18 +210,18 @@ targets:
         SWIFT_VERSION: "6.0"
         ENABLE_HARDENED_RUNTIME: YES
     dependencies:
-      - package: VPN
+      - package: Qingzhou
         product: XrayCore
-      # Extension 里要用 VPNCore.ProxyMode（share link → xray 配置转换在这里做）。
-      - package: VPN
-        product: VPNCore
+      # Extension 里要用 QingzhouCore.ProxyMode（share link → xray 配置转换在这里做）。
+      - package: Qingzhou
+        product: QingzhouCore
       # XrayConfigComposer 现在住在 XrayConfig（纯 Swift，不拖 LibXray）。
-      - package: VPN
+      - package: Qingzhou
         product: XrayConfig
 
   # macOS 内容过滤扩展：只观测连接、标注来源 App（bundle id），不阻断。
   # 只在 macOS 有 —— iOS 的 content filter 需要 MDM 监督，普通 App Store app 用不了。
-  VPN-Filter-macOS:
+  Qingzhou-Filter-macOS:
     type: system-extension
     platform: macOS
     sources:
@@ -268,17 +268,17 @@ targets:
         # app-extension 形态的 NE provider（Tunnel appex）没这要求，所以只有这个系统扩展中招。
         PRODUCT_NAME: com.sbraveyoung.qingzhou.mac.filter
         # PRODUCT_NAME 带点会污染自动推导的 Swift 模块名，显式钉住，保证 Info.plist 里
-        # $(PRODUCT_MODULE_NAME).FilterDataProvider 稳定解析成 VPN_Filter_macOS.FilterDataProvider
-        PRODUCT_MODULE_NAME: VPN_Filter_macOS
+        # $(PRODUCT_MODULE_NAME).FilterDataProvider 稳定解析成 Qingzhou_Filter_macOS.FilterDataProvider
+        PRODUCT_MODULE_NAME: Qingzhou_Filter_macOS
         DEVELOPMENT_TEAM: UK7MME38H9
         SWIFT_VERSION: "6.0"
         ENABLE_HARDENED_RUNTIME: YES
 
 schemes:
-  VPN-iOS:
+  Qingzhou-iOS:
     build:
       targets:
-        VPN-iOS: all
+        Qingzhou-iOS: all
     run:
       config: Debug
     test:
@@ -287,10 +287,10 @@ schemes:
       config: Release
     archive:
       config: Release
-  VPN-macOS:
+  Qingzhou-macOS:
     build:
       targets:
-        VPN-macOS: all
+        Qingzhou-macOS: all
     run:
       config: Debug
     test:

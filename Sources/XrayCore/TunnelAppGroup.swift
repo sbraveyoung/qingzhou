@@ -4,7 +4,7 @@
 // 主 App 在调用 NETunnelProviderManager.startVPNTunnel() 之前先把配置写进来；
 // Extension 的 startTunnel(options:) 里读出来。
 //
-// 不依赖 VPNApp / VPNCore 任何业务类型，纯 String/Data 跨进程。XrayCore 是
+// 不依赖 QingzhouApp / QingzhouCore 任何业务类型，纯 String/Data 跨进程。XrayCore 是
 // Extension target 唯一需要的 SPM 依赖，把这个 helper 也塞进来正合适。
 
 import Foundation

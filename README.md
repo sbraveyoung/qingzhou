@@ -36,14 +36,14 @@
 
 ```
 ┌─────────────────────────┐
-│  VPN-iOS / VPN-macOS    │ ← 主 App(SwiftUI,无 libXray 依赖,启动 < 1s)
+│  Qingzhou-iOS / Qingzhou-macOS    │ ← 主 App(SwiftUI,无 libXray 依赖,启动 < 1s)
 │  - 订阅/节点/规则 UI    │
 │  - VPNTunnelManager     │
 └──────────┬──────────────┘
            │ providerConfiguration["nodeJSON"]
            ▼
 ┌─────────────────────────┐
-│  VPN-Tunnel-iOS.appex   │ ← Network Extension(独立进程,内存上限 50MB)
+│  Qingzhou-Tunnel-iOS.appex   │ ← Network Extension(独立进程,内存上限 50MB)
 │  - PacketTunnelProvider │
 │  - socketpair TUN shim  │ ← iOS 26 起 KVC fd 路径已失效,改用 socketpair
 │  - NodeConverter        │ ← 纯 Swift 把 Node 转 xray outbound JSON
@@ -66,8 +66,8 @@ cd qingzhou
 brew install xcodegen
 cd Apps && xcodegen generate
 
-# 第三步:Xcode 打开,选 VPN-iOS scheme,Cmd+R
-open Apps/VPN.xcodeproj
+# 第三步:Xcode 打开,选 Qingzhou-iOS scheme,Cmd+R
+open Apps/Qingzhou.xcodeproj
 ```
 
 详细 build 说明 / 真机签名 / 调试技巧见 [docs/BUILD.md](docs/BUILD.md)。

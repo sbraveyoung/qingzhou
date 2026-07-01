@@ -56,6 +56,11 @@ targets:
         # 让主 App 能管理 Personal VPN 配置 —— 启停 Packet Tunnel Extension 必需
         com.apple.developer.networking.networkextension:
           - packet-tunnel-provider
+        # App Group：主 App 和隧道扩展跨进程共享数据（流量统计 / access log）。
+        # 必须写在这里 —— xcodegen 每次 generate 都用 properties 重建 entitlements 文件，
+        # 只改 .entitlements 文件会被覆盖掉。
+        com.apple.security.application-groups:
+          - group.com.sbraveyoung.qingzhou
     dependencies:
       - package: VPN
         product: VPNApp
@@ -96,6 +101,8 @@ targets:
         # 让主 App 能管理 Personal VPN 配置 —— 启停 Packet Tunnel Extension 必需
         com.apple.developer.networking.networkextension:
           - packet-tunnel-provider
+        com.apple.security.application-groups:
+          - group.com.sbraveyoung.qingzhou
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sbraveyoung.qingzhou.mac
@@ -143,6 +150,8 @@ targets:
       properties:
         com.apple.developer.networking.networkextension:
           - packet-tunnel-provider
+        com.apple.security.application-groups:
+          - group.com.sbraveyoung.qingzhou
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sbraveyoung.qingzhou.ios.tunnel
@@ -181,6 +190,8 @@ targets:
         com.apple.security.network.server: true
         com.apple.developer.networking.networkextension:
           - packet-tunnel-provider
+        com.apple.security.application-groups:
+          - group.com.sbraveyoung.qingzhou
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sbraveyoung.qingzhou.mac.tunnel

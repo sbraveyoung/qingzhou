@@ -99,18 +99,6 @@ public enum XrayConfigComposer {
             ]
         ]]
 
-        // metrics inbound：一个只监听 127.0.0.1 的 dokodemo-door，xray 的 metrics 特性
-        // 会劫持它的监听端口，用 HTTP 在 /debug/vars 暴露 expvar 统计。配合下面的
-        // stats + policy，就能按 outbound tag 拿到累计上/下行字节。appex 用 metricsURL 轮询。
-        if enableStats {
-            inbounds.append([
-                "tag": "metrics-in",
-                "listen": Self.metricsListenAddress,
-                "port": Self.metricsPort,
-                "protocol": "dokodemo-door",
-                "settings": ["address": Self.metricsListenAddress]
-            ])
-        }
 
         // 开了 access log，xray 会把每条连接（from src accepted net:host:port [in -> out]）
         // 追加写到这个文件；主 App 读出来解析成真实连接（AccessLogParser）。sniffing 已开，
@@ -137,7 +125,8 @@ public enum XrayConfigComposer {
         ]
 
         // 统计：stats 打开计数器容器，policy.system 打开系统级 in/out 上下行计数，
-        // metrics 把 expvar 绑到 metrics-in 这个 inbound 上对外暴露。三者缺一不可。
+        // metrics.listen 让 xray 自己在这个本机地址上开 HTTP 服务、于 /debug/vars 暴露 expvar。
+        // （新版 xray 直接用 metrics.listen，不再需要旧写法里那个 tag + dokodemo-door inbound。）
         if enableStats {
             config["stats"] = [:] as [String: Any]
             config["policy"] = [
@@ -148,7 +137,7 @@ public enum XrayConfigComposer {
                     "statsOutboundDownlink": true
                 ]
             ]
-            config["metrics"] = ["tag": "metrics-in"]
+            config["metrics"] = ["listen": "\(Self.metricsListenAddress):\(Self.metricsPort)"]
         }
 
         let out = try JSONSerialization.data(

@@ -37,20 +37,18 @@ final class XrayConfigComposerTests: XCTestCase {
         XCTAssertEqual((json["inbounds"] as! [[String: Any]]).count, 1)
     }
 
-    /// 开统计：加 stats + policy.system + metrics(tag) + 一个 dokodemo-door metrics inbound。
-    func testEnableStatsAddsMetricsInboundAndPolicy() throws {
+    /// 开统计：加 stats + policy.system + metrics.listen（新版 xray 自开监听，不再需要额外 inbound）。
+    func testEnableStatsAddsMetricsListenAndPolicy() throws {
         let json = try parse(try XrayConfigComposer.compose(
             outboundsJSON: fakeTrojanOutbounds, mode: .global, enableStats: true))
         XCTAssertNotNil(json["stats"])
-        XCTAssertEqual((json["metrics"] as? [String: Any])?["tag"] as? String, "metrics-in")
+        XCTAssertEqual((json["metrics"] as? [String: Any])?["listen"] as? String,
+                       "\(XrayConfigComposer.metricsListenAddress):\(XrayConfigComposer.metricsPort)")
         let sys = ((json["policy"] as? [String: Any])?["system"]) as? [String: Any]
         XCTAssertEqual(sys?["statsOutboundUplink"] as? Bool, true)
         XCTAssertEqual(sys?["statsOutboundDownlink"] as? Bool, true)
-        let inbounds = json["inbounds"] as! [[String: Any]]
-        XCTAssertEqual(inbounds.count, 2)
-        let metrics = inbounds.first { ($0["tag"] as? String) == "metrics-in" }
-        XCTAssertEqual(metrics?["port"] as? Int, XrayConfigComposer.metricsPort)
-        XCTAssertEqual(metrics?["protocol"] as? String, "dokodemo-door")
+        // 只有 tun 一个 inbound（metrics 走 metrics.listen，不占 inbound）
+        XCTAssertEqual((json["inbounds"] as! [[String: Any]]).count, 1)
     }
 
     func testComposeWrapsOutboundIntoFullConfigGlobal() throws {

@@ -95,11 +95,12 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             let outboundsJSON = try resolveOutboundsJSON(nodeJSON: nodeJSON, shareLink: shareLink)
             // accessLogPath() 内部会清空旧日志 + 验证容器可写；返回 nil 时 compose 不配 access，
             // VPN 照常起（只是没有连接日志）。让 xray 把连接日志写到 App Group，主 App 解析展示。
+            // ⚠️ enableStats 暂时关掉 —— 这版 xray-core (v1.260327.0) 的 metrics 配置写法未确认，
+            // 之前打开导致 xray 起不来、全网黑洞。等在真机上确认正确的 metrics 配置后再打开。
             xrayJSON = try XrayConfigComposer.compose(
                 outboundsJSON: outboundsJSON,
                 mode: mode,
-                accessLogPath: TunnelAppGroup.accessLogPath(),
-                enableStats: true   // 开 metrics/expvar，reportTrafficStats 里拉 per-node 累计流量
+                accessLogPath: TunnelAppGroup.accessLogPath()
             )
         } catch {
             os_log("share link → xray config 转换失败: %{public}@",

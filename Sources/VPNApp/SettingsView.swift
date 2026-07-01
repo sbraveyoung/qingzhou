@@ -3,6 +3,7 @@ import VPNCore
 
 public struct SettingsView: View {
     @Bindable var state: AppState
+    @State private var filterEnabled = false
 
     public init(state: AppState) { self.state = state }
 
@@ -162,20 +163,26 @@ public struct SettingsView: View {
             Button("立即应用") {
                 state.applyMacSystemPreferences()
             }
-            Button("启用来源 App 标注") {
+            Button(filterEnabled ? "关闭来源 App 标注" : "启用来源 App 标注") {
                 ContentFilterManager.shared.onNeedsApproval = {
                     state.showToast("请到「系统设置 → 通用 → 登录项与扩展 → 网络扩展」批准轻舟")
                 }
                 Task {
                     do {
-                        try await ContentFilterManager.shared.activateAndEnable()
-                        state.showToast("已启用来源 App 标注")
+                        if filterEnabled {
+                            try await ContentFilterManager.shared.disable()
+                        } else {
+                            try await ContentFilterManager.shared.activateAndEnable()
+                        }
+                        filterEnabled = ContentFilterManager.isEnabled
+                        state.showToast(filterEnabled ? "已启用来源 App 标注" : "已关闭来源 App 标注")
                     } catch {
-                        state.showToast("启用失败：\(error.localizedDescription)")
-                        state.logger.error("Content filter enable failed: \(error)", category: "filter")
+                        state.showToast("操作失败：\(error.localizedDescription)")
+                        state.logger.error("Content filter toggle failed: \(error)", category: "filter")
                     }
                 }
             }
+            .task { filterEnabled = ContentFilterManager.isEnabled }
             Text("开启后「连接」页会标注每条流量是哪个 App 发起的。首次要在系统设置批准扩展 + 授权过滤。")
                 .font(.caption2).foregroundStyle(.secondary)
         }

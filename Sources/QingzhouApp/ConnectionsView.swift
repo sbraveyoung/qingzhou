@@ -24,14 +24,13 @@ public struct ConnectionsView: View {
         VStack(spacing: 0) {
             controls(hiddenIPCount: result.hiddenIPCount)
             if result.visible.isEmpty {
+                let empty = Self.emptyState(filter: filter, searching: !keyword.isEmpty,
+                                            hiddenIPCount: result.hiddenIPCount,
+                                            vpnRunning: state.isVPNRunning)
                 ContentUnavailableView {
-                    Label("暂无连接", systemImage: "antenna.radiowaves.left.and.right.slash")
+                    Label(empty.title, systemImage: empty.icon)
                 } description: {
-                    if result.hiddenIPCount > 0 {
-                        Text("「忽略 IP」已隐藏 \(result.hiddenIPCount) 条纯 IP 连接。")
-                    } else {
-                        Text("开启 VPN 后，这里会展示真实的访问记录。")
-                    }
+                    Text(empty.description)
                 }
                 .frame(maxHeight: .infinity)
             } else {
@@ -69,12 +68,40 @@ public struct ConnectionsView: View {
                         }
                     }
             }
+            // sheet 盖住 RootView 的 toast 浮层，一键规则的反馈要在 sheet 里再挂一份才可见
+            .toastOverlay(state: state)
             // macOS 上 sheet 不给尺寸会缩成一个小空框（看起来"啥都没有"）——显式给最小尺寸。
             #if os(macOS)
             .frame(minWidth: 480, minHeight: 560)
             #endif
         }
         .searchable(text: $keyword, prompt: "搜索 host / route / app")
+    }
+
+    /// 空态文案：按「为什么空」区分。踩过的坑：三个分组共用「开启 VPN 后…」——
+    /// VPN 明明开着时用户会以为开关没开（真实验收反馈）。
+    /// 优先级：过滤导致（搜索词/忽略 IP）> 「已关闭」分组语义 > VPN 状态。
+    static func emptyState(filter: ConnectionFilter, searching: Bool,
+                           hiddenIPCount: Int, vpnRunning: Bool)
+        -> (title: String, description: String, icon: String) {
+        if searching || hiddenIPCount > 0 {
+            var d = "当前搜索/过滤条件下没有匹配项。"
+            if hiddenIPCount > 0 {
+                d += "「忽略 IP」已隐藏 \(hiddenIPCount) 条纯 IP 连接。"
+            }
+            return ("没有匹配的连接", d, "line.3.horizontal.decrease.circle")
+        }
+        if filter == .closed {
+            return ("还没有已关闭的连接",
+                    "活跃连接约 \(Int(ConnectionTracker.idleTimeout)) 秒无活动后会归入这里。",
+                    "clock.arrow.circlepath")
+        }
+        if vpnRunning {
+            return ("暂无连接记录", "浏览网页后这里会实时更新。",
+                    "antenna.radiowaves.left.and.right")
+        }
+        return ("暂无连接", "开启 VPN 后，这里会展示真实的访问记录。",
+                "antenna.radiowaves.left.and.right.slash")
     }
 
     private func controls(hiddenIPCount: Int) -> some View {
@@ -141,7 +168,7 @@ public struct ConnectionsView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Circle()
-                    .fill(c.isActive ? Color.green : Color.secondary)
+                    .fill(statusDotColor(c))
                     .frame(width: 8, height: 8)
                 Text(c.targetHost).font(.headline)
                 Spacer()
@@ -179,5 +206,19 @@ public struct ConnectionsView: View {
             .font(.caption2.monospaced()).foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+        // 一键规则：iOS 长按/左滑，macOS 右键 →「加入直连 / 代理 / 拒绝」
+        .quickRuleActions(host: c.targetHost, state: state)
+    }
+
+    /// 行首状态点：被拒绝的连接恒为红色 —— xray reject 是即时的，没有「连通」阶段，
+    /// 沿用 isActive 的绿点会让用户以为连接成功了（真实验收反馈）。
+    ///
+    /// 只改显示层、不在摄入时置 closedAt：被拒目标（典型是广告域名）会高频重试，
+    /// ConnectionTracker 靠「活跃身份」去重才让它们合并成一行；摄入即关闭会破坏去重
+    /// （每次重试都成新行，连接页和每日拒绝计数一起灌水），或者得给 tracker 引入
+    /// 「已关闭仍去重」的特殊态。显示层修复已消除误导，域名分析的拒绝统计口径不变。
+    private func statusDotColor(_ c: Connection) -> Color {
+        if DomainAnalyzer.routeCategory(c.route) == .reject { return .red }
+        return c.isActive ? .green : .secondary
     }
 }

@@ -114,8 +114,10 @@ public final class AppState {
     private var domainHistoryDirty = false
     /// internal 供测试注入 0 关掉节流做确定性断言。
     var domainHistorySaveInterval: TimeInterval = 10
-    /// appex 写的「假 IP → 域名」映射（FakeDNS），把 access log 的 198.18.x.x 翻回域名。
-    private var fakeDNSMap: [String: String] = [:]
+    /// appex 写的「IP → 域名」映射，把 access log 的裸 IP 翻回域名。里面既有 fakedns
+    /// 假 IP（198.18.x.x）也有真实 DNS 应答的 IP（rule 模式下 CN 域名走 AliDNS 拿真实 IP）。
+    /// internal 供单测直接注入（backfillDomainNames 用例）。
+    var fakeDNSMap: [String: String] = [:]
     /// content filter 扩展提供的「源端口 → 来源 App bundle id」（仅 macOS）。
     private var sourceAppMap: [String: String] = [:]
     #if os(macOS)
@@ -1003,6 +1005,59 @@ public final class AppState {
         reapplyForRulesChange()
     }
 
+    /// 「一键规则」的结果，UI 据此不用再猜发生了什么（toast 文案已在方法内给出）。
+    public enum QuickRuleOutcome: Equatable, Sendable {
+        case added(domain: String)                                     // 新增了一条规则
+        case retargeted(domain: String, from: RuleTarget, to: RuleTarget) // 同域名已有规则，原地改目标
+        case unchanged(domain: String)                                 // 同域名同目标，什么都没做
+        case notADomain(host: String)                                  // 裸 IP / 无点主机名，DOMAIN-SUFFIX 不适用
+    }
+
+    /// 域名分析 / 连接页的「加入直连 / 代理 / 拒绝」一键规则入口。
+    ///
+    /// - host 先归并成主域名（registrable domain），规则形如 `DOMAIN-SUFFIX,youtube.com,PROXY`；
+    /// - 自定义规则里已有同域名的 DOMAIN / DOMAIN-SUFFIX 时**原地改目标**而不是重复添加
+    ///   （改目标顺手升级成 SUFFIX，覆盖全部子域名）；同域名同目标则告知「已存在」；
+    /// - 走 addCustomRule 同款持久化 + 热切换路径，VPN 在跑且 rule 模式时立即生效；
+    /// - 每种结果都有 toast 反馈。
+    @discardableResult
+    public func quickAddDomainRule(forHost host: String, target: RuleTarget) -> QuickRuleOutcome {
+        let domain = DomainAnalyzer.registrableDomain(host)
+        guard !HostClassifier.isBareIP(host), domain.contains(".") else {
+            showToast("「\(host)」不是域名，无法生成域名规则")
+            return .notADomain(host: host)
+        }
+        let targetName = Self.quickRuleTargetName(target)
+        if let idx = customRules.firstIndex(where: {
+            ($0.type == .domainSuffix || $0.type == .domain) && $0.value.lowercased() == domain
+        }) {
+            let old = customRules[idx].target
+            guard old != target else {
+                showToast("已有规则：\(customRules[idx].lineForm)")
+                return .unchanged(domain: domain)
+            }
+            customRules[idx].target = target
+            customRules[idx].type = .domainSuffix
+            logger.info("Retargeted custom rule \(customRules[idx].lineForm) (was \(old.rawValue))",
+                        category: "rules")
+            persist()
+            reapplyForRulesChange()
+            showToast("\(domain) 已从\(Self.quickRuleTargetName(old))改为\(targetName)，规则已生效")
+            return .retargeted(domain: domain, from: old, to: target)
+        }
+        addCustomRule(Rule(type: .domainSuffix, value: domain, target: target, comment: "一键添加"))
+        showToast("已加入\(targetName)：\(domain)，规则已生效")
+        return .added(domain: domain)
+    }
+
+    private static func quickRuleTargetName(_ t: RuleTarget) -> String {
+        switch t {
+        case .proxy:  return "代理"
+        case .direct: return "直连"
+        case .reject: return "拒绝"
+        }
+    }
+
     /// 规则集变了：VPN 在跑且是 rule 模式时热切换，让新规则立即对真实流量生效。
     /// global / direct 模式不吃规则，改规则不值得为此断流重启隧道。
     func reapplyForRulesChange() {
@@ -1103,10 +1158,14 @@ public final class AppState {
                 fakeDNSMap = map
             }
             // 核心摄入永远先跑 —— 来源 App 标注只是可选增强，它的 XPC 绝不能阻塞连接列表。
-            // （踩过的坑：filter 扩展关闭时 XPC await 悬死，循环卡在第一轮，连接页恒空。）
+            // （踩过的坑：filter 扩展关闭时 XPC await 悬死，循环卡在第一轮，连接页恒空。
+            //   ⚠️ merge 时别把 ingestAccessLog 挪回 XPC 之后，这个顺序丢过一次。）
             ingestAccessLog()
+            // 回翻：连接常在 map 落盘（appex 每秒才写一次）之前就被 ingest，只在解析那刻
+            // 查一次会让这批连接永远顶着裸 IP（按域名搜不到、开「忽略 IP」时整行被藏）。
+            backfillDomainNames()
             #if os(macOS)
-            // 来源 App 标注暂时搁置（见 FeatureFlags.sourceAppLabeling）。开启时才走 XPC + 回填。
+            // 来源 App 标注开启时才走 XPC + 回填（FilterControlClient 带 2 秒超时兜底）。
             if FeatureFlags.sourceAppLabeling {
                 // content filter 扩展（root）经 XPC 提供端口→App 映射；没启用/连不上则保持上次的值。
                 let fetched = await filterControl.fetchPortMap()
@@ -1124,11 +1183,14 @@ public final class AppState {
     }
 
     #if os(macOS)
-    /// 用最新的「源端口 → 来源 App」映射，回填所有还没标注来源的连接。
+    /// 用最新的「源端口 → 来源 App」映射，回填还没标注来源的**活跃**连接。
     /// content filter 的 map 常晚于连接 ingest 才就绪，只在解析那刻查一次会漏掉大批连接。
+    /// 只回填活跃的：已关闭连接的源端口可能早被系统回收给了别的 App，再回填就是误标
+    /// （见 FeatureFlags.sourceAppLabeling 注释第 2 条）。
     private func backfillSourceApps() {
         guard !sourceAppMap.isEmpty else { return }
-        for i in connectionTracker.connections.indices where connectionTracker.connections[i].sourceApp == nil {
+        for i in connectionTracker.connections.indices
+        where connectionTracker.connections[i].sourceApp == nil && connectionTracker.connections[i].isActive {
             if let port = connectionTracker.connections[i].sourceAddress.split(separator: ":").last.map(String.init),
                let bundleID = sourceAppMap[port] {
                 connectionTracker.connections[i].sourceApp = bundleID
@@ -1136,6 +1198,32 @@ public final class AppState {
         }
     }
     #endif
+
+    /// 用最新的「IP → 域名」映射，把已摄入连接里还是裸 IP 的 targetHost 回翻成域名。
+    ///
+    /// 为什么需要：appex 的 fakedns-map 每秒才落盘一次，连接（access log 行）常在对应
+    /// DNS 应答进 map 之前就被 ingest —— 只在解析那刻查一次，这批连接会永远顶着裸 IP：
+    /// 按域名搜不到、开「忽略 IP」时整行被藏（zhihu 验收反馈的可修部分）。
+    ///
+    /// 只改 targetHost（搜索/聚合用）并重算 matchedRule（host 变了命中会变）；
+    /// targetAddress 保留 ip:port 原样 —— 那一行本来就该显示真实地址，
+    /// 且 ConnectionTracker 的身份索引 key 是 ingest 时算好的字符串，不受字段就地修改影响。
+    /// 已经落进 DomainDailyHistory 的按 IP 记录不回改（历史口径以 ingest 时刻为准）。
+    /// internal 供单测直接驱动。
+    func backfillDomainNames() {
+        guard !fakeDNSMap.isEmpty else { return }
+        var resolver: MatchedRuleResolver?
+        for i in connectionTracker.connections.indices {
+            guard let domain = fakeDNSMap[connectionTracker.connections[i].targetHost] else { continue }
+            connectionTracker.connections[i].targetHost = domain
+            let r = resolver ?? currentMatchedRuleResolver()
+            resolver = r
+            connectionTracker.connections[i].matchedRule = r.resolve(
+                host: domain,
+                route: DomainAnalyzer.routeCategory(connectionTracker.connections[i].route)
+            )
+        }
+    }
 
     private func ingestAccessLog() {
         defer {

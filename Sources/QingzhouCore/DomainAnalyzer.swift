@@ -54,6 +54,19 @@ public struct DailyDigest: Sendable, Equatable, Identifiable {
         self.directCount = directCount
         self.rejectCount = rejectCount
     }
+
+    /// 按域名关键字过滤（大小写不敏感）。无匹配 → nil（这一天整个不显示）；
+    /// 关键字为空/全空白 → 原样返回。proxy/direct/rejectCount 保持全天口径不改写 ——
+    /// UI 在搜索态下自行隐藏这段，避免和过滤后的行数对不上。
+    public func filtered(byDomainKeyword keyword: String) -> DailyDigest? {
+        let kw = keyword.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !kw.isEmpty else { return self }
+        let matched = domains.filter { $0.domain.lowercased().contains(kw) }
+        guard !matched.isEmpty else { return nil }
+        var copy = self
+        copy.domains = matched
+        return copy
+    }
 }
 
 public struct RuleSuggestion: Sendable, Equatable, Identifiable {
@@ -145,6 +158,54 @@ public enum DomainAnalyzer {
         .sorted { $0.day > $1.day }
     }
 
+    // MARK: - 按来源 App 聚合（macOS「应用」视角）
+
+    /// 单个来源 App 的连接聚合。`bundleID == nil` 是「未知来源」杂项桶：
+    /// 启用内容过滤扩展**之前**建立的连接、以及无法归属的系统流量都落在这里。
+    public struct AppUsageStat: Sendable, Equatable, Identifiable {
+        public var bundleID: String?
+        public var connectionCount: Int
+        /// top N 主域名（按连接次数降序）。截断后的总域名数见 `totalDomainCount`。
+        public var domains: [DomainStat]
+        public var totalDomainCount: Int
+
+        public var id: String { bundleID ?? "(unknown)" }
+
+        public init(bundleID: String?, connectionCount: Int, domains: [DomainStat], totalDomainCount: Int) {
+            self.bundleID = bundleID
+            self.connectionCount = connectionCount
+            self.domains = domains
+            self.totalDomainCount = totalDomainCount
+        }
+    }
+
+    /// 按 `sourceApp` 分组，组内复用域名聚合（registrable domain 归并 + 连接次数排序）。
+    /// 排序：真实 App 按连接次数降序（同次数按 bundle id 字典序）；「未知来源」恒排最后 ——
+    /// 它是杂项桶，哪怕最大也不该压过真实 App。
+    public static func aggregateByApp(_ connections: [Connection],
+                                      topDomains: Int = 5) -> [AppUsageStat] {
+        let groups = Dictionary(grouping: connections) { $0.sourceApp }
+        var known: [AppUsageStat] = []
+        var unknown: AppUsageStat?
+        for (app, conns) in groups {
+            let domains = aggregate(conns, sortBy: .connections)
+            let stat = AppUsageStat(
+                bundleID: app,
+                connectionCount: conns.count,
+                domains: Array(domains.prefix(topDomains)),
+                totalDomainCount: domains.count
+            )
+            if app == nil { unknown = stat } else { known.append(stat) }
+        }
+        known.sort {
+            $0.connectionCount != $1.connectionCount
+                ? $0.connectionCount > $1.connectionCount
+                : ($0.bundleID ?? "") < ($1.bundleID ?? "")
+        }
+        if let unknown { known.append(unknown) }
+        return known
+    }
+
     // MARK: - 规则优化建议
 
     public static func suggestions(_ stats: [DomainStat]) -> [RuleSuggestion] {
@@ -209,12 +270,9 @@ public enum DomainAnalyzer {
         return isUnmatchedRule(existing) && !new.isEmpty ? new : existing
     }
 
-    private static let cnKnownDomains: Set<String> = [
-        "baidu.com", "qq.com", "taobao.com", "tmall.com", "jd.com", "weibo.com",
-        "bilibili.com", "163.com", "alipay.com", "douyin.com", "alicdn.com", "qpic.cn"
-    ]
-
+    /// CN 归属判定：内置后缀表（geosite:cn 高频子集）+ 中国 TLD 规则，见 `CNDomains`。
+    /// （替代了早期的 12 域名硬编码。）
     private static func isLikelyCN(_ domain: String) -> Bool {
-        domain.hasSuffix(".cn") || cnKnownDomains.contains(domain)
+        CNDomains.isLikelyCN(domain)
     }
 }

@@ -74,6 +74,9 @@ public final class AppState {
     public var subscriptionErrors: [UUID: String] = [:]
     /// 轻量 toast 文案（自动择优、订阅添加等非阻塞反馈）。UI 浮层显示，几秒自动消失。
     public var toast: String?
+    /// 「浏览器可能在用 DoH」提示被用户点掉（连接页/域名分析共用）。
+    /// 只在内存 —— 本会话不再弹，下次启动条件仍满足会再提示。
+    public var dohNoticeDismissed = false
     /// iCloud vault 同步状态（设置页展示）。
     public internal(set) var cloudSyncStatus: CloudSyncStatus = .unknown
     /// 待确认的恢复候选（启动检查发现云端更新 / 用户从版本列表选了一份）。非 nil 时 UI 弹

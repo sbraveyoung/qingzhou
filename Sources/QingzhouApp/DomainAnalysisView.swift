@@ -88,6 +88,11 @@ public struct DomainAnalysisView: View {
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             .listRowSeparator(.hidden)
 
+            // DoH 检测：裸 IP 连接占比异常高时说明原因（可关闭，与连接页共用会话级状态）
+            if DoHNoticeBanner.shouldShow(state: state) {
+                DoHNoticeBanner(state: state)
+                    .listRowSeparator(.hidden)
+            }
             // 过滤生效时的轻提示，避免用户忘了开着过滤、以为数据少了
             if hiddenIPCount > 0 {
                 HStack(spacing: 4) {

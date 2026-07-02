@@ -116,6 +116,10 @@ public struct ConnectionsView: View {
                 // 放在分段控件旁而不是 toolbar：iOS 工具栏空间紧，这里文字能完整展示
                 IgnoreIPToggle(isOn: $hideBareIPs)
             }
+            // DoH 检测：裸 IP 连接占比异常高时说明原因（可关闭，会话级）
+            if DoHNoticeBanner.shouldShow(state: state) {
+                DoHNoticeBanner(state: state)
+            }
             // 过滤生效时的轻提示：避免用户忘了开着「忽略 IP」，以为数据丢了
             if hiddenIPCount > 0 {
                 HStack(spacing: 4) {

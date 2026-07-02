@@ -200,8 +200,8 @@ public enum DomainAnalyzer {
     }
 
     /// 聚合时合并 matchedRule：真实规则文本优先于「未命中」哨兵/空串；
-    /// 两个都是真实规则时保留后到的（"last" 语义）。
-    private static func mergedRule(existing: String, new: String) -> String {
+    /// 两个都是真实规则时保留后到的（"last" 语义）。internal 供 DomainDailyHistory 复用同一口径。
+    static func mergedRule(existing: String, new: String) -> String {
         if !isUnmatchedRule(new) { return new }
         return isUnmatchedRule(existing) && !new.isEmpty ? new : existing
     }

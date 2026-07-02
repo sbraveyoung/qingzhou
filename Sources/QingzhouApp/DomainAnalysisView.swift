@@ -14,7 +14,9 @@ public struct DomainAnalysisView: View {
         // 排序/展示都用连接次数维度：接上 QueryStats 拿到真实字节前，per-连接流量恒 0，
         // 「按流量排序 + 显示 0B」是假数据。有真实字节后把 sortBy 切回 .traffic 并恢复字节列。
         let stats = DomainAnalyzer.aggregate(connections, sortBy: .connections)
-        let digests = DomainAnalyzer.daily(connections, sortBy: .connections)
+        // 「每日」读按天聚合的持久化历史（跨重启、保留 30 天），不再从内存最近 200 条
+        // 连接现算 —— 那是假历史。
+        let digests = state.domainHistory.digests()
         let suggestions = DomainAnalyzer.suggestions(stats)
 
         List {
@@ -32,8 +34,13 @@ public struct DomainAnalysisView: View {
                     ForEach(stats) { domainRow($0) }
                 }
             case 1:
-                ForEach(digests) { d in
-                    Section { ForEach(d.domains.prefix(8)) { domainRow($0) } } header: { dailyHeader(d) }
+                if digests.isEmpty {
+                    ContentUnavailableView("暂无每日历史", systemImage: "calendar",
+                                           description: Text("开启 VPN 浏览后，这里按天保留最近 30 天的域名访问汇总。"))
+                } else {
+                    ForEach(digests) { d in
+                        Section { ForEach(d.domains.prefix(8)) { domainRow($0) } } header: { dailyHeader(d) }
+                    }
                 }
             default:
                 if suggestions.isEmpty {

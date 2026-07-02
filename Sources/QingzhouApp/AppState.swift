@@ -47,6 +47,9 @@ public final class AppState {
     /// 200 条、重启清零，每日历史必须靠它。⚠️ 访问历史属敏感数据：独立文件落本地
     /// （`Self.domainHistoryFile`），**不进 Persistence.Snapshot**，绝不被 iCloud vault 镜像。
     public private(set) var domainHistory = DomainDailyHistory()
+    /// 自定义规则的命中计数（近 30 天，规则页「命中 N 次 / 可考虑删除」数据源）。
+    /// ⚠️ 同 domainHistory：独立文件落本地，**不进 Snapshot**、不上 iCloud。
+    public private(set) var ruleHitStats = RuleHitStats()
     /// 实时流量波形数据（滑动窗口）。appex 经 App Group 上报 `TrafficStats` 喂进来；
     /// 没开 VPN / 没真实上报时为空，UI 显示「等待流量」。
     public var trafficHistory = TrafficHistory(capacity: 60)
@@ -101,6 +104,9 @@ public final class AppState {
     public var subscriptionErrors: [UUID: String] = [:]
     /// 轻量 toast 文案（自动择优、订阅添加等非阻塞反馈）。UI 浮层显示，几秒自动消失。
     public var toast: String?
+    /// 「浏览器可能在用 DoH」提示被用户点掉（连接页/域名分析共用）。
+    /// 只在内存 —— 本会话不再弹，下次启动条件仍满足会再提示。
+    public var dohNoticeDismissed = false
     /// iCloud vault 同步状态（设置页展示）。
     public internal(set) var cloudSyncStatus: CloudSyncStatus = .unknown
     /// 待确认的恢复候选（启动检查发现云端更新 / 用户从版本列表选了一份）。非 nil 时 UI 弹
@@ -144,6 +150,12 @@ public final class AppState {
     private var domainHistoryDirty = false
     /// internal 供测试注入 0 关掉节流做确定性断言。
     var domainHistorySaveInterval: TimeInterval = 10
+    /// ruleHitStats 的独立持久化（节流模式与 domainHistory 完全一致）。
+    static let ruleHitStatsFile = "rule-hit-stats"
+    private var ruleHitStatsSavedAt = Date.distantPast
+    private var ruleHitStatsDirty = false
+    /// internal 供测试注入 0 关掉节流做确定性断言。
+    var ruleHitStatsSaveInterval: TimeInterval = 10
     /// appex 写的「IP → 域名」映射，把 access log 的裸 IP 翻回域名。里面既有 fakedns
     /// 假 IP（198.18.x.x）也有真实 DNS 应答的 IP（rule 模式下 CN 域名走 AliDNS 拿真实 IP）。
     /// internal 供单测直接注入（backfillDomainNames 用例）。
@@ -183,6 +195,11 @@ public final class AppState {
             ?? DomainDailyHistory()
         history.prune()
         self.domainHistory = history
+        // 规则命中计数：同 domainHistory 的隐私/落盘约定，首次运行从现在起跟踪
+        var hits = persistence.load(RuleHitStats.self, name: Self.ruleHitStatsFile)
+            ?? RuleHitStats()
+        hits.prune()
+        self.ruleHitStats = hits
         logger.info(
             "AppState restored: \(subscriptions.count) subs, \(nodes.count) nodes, \(customRules.count) custom rules",
             category: "app"
@@ -1084,6 +1101,33 @@ public final class AppState {
         return .added(domain: domain)
     }
 
+    /// 「可合并规则」建议的一键应用：删掉同域名的散规则，在第一条被替换规则的位置
+    /// 插入一条 `DOMAIN-SUFFIX,主域名,目标`（保住 first-match 优先级），
+    /// 走 addCustomRule 同款持久化 + 热切换路径。
+    /// 建议已过期（规则被删/被改）时不动任何东西，返回 false。
+    @discardableResult
+    public func applyRuleMerge(_ suggestion: RuleMergeSuggestion) -> Bool {
+        let ids = Set(suggestion.rules.map(\.id))
+        // 过期检查：建议里的规则必须**全部**还在且目标未变 —— 部分失效时语义已经变了
+        //（比如其中一条被改成了 REJECT），按过期处理让 UI 重新计算建议。
+        let live = customRules.filter { ids.contains($0.id) }
+        guard live.count == suggestion.rules.count,
+              live.allSatisfy({ $0.target == suggestion.target }),
+              let firstIdx = customRules.firstIndex(where: { ids.contains($0.id) }) else {
+            showToast("规则已变化，建议已过期")
+            return false
+        }
+        customRules.removeAll { ids.contains($0.id) }
+        let merged = Rule(type: .domainSuffix, value: suggestion.domain,
+                          target: suggestion.target, comment: "合并自 \(suggestion.rules.count) 条规则")
+        customRules.insert(merged, at: min(firstIdx, customRules.count))
+        logger.info("Merged \(suggestion.rules.count) rules into \(merged.lineForm)", category: "rules")
+        persist()
+        reapplyForRulesChange()
+        showToast("已合并 \(suggestion.rules.count) 条为 \(merged.lineForm)，规则已生效")
+        return true
+    }
+
     private static func quickRuleTargetName(_ t: RuleTarget) -> String {
         switch t {
         case .proxy:  return "代理"
@@ -1211,8 +1255,9 @@ public final class AppState {
                 backfillSourceApps()
             }
             #endif
-            // 停止浏览后 ingest 不再产出批次，这里兜底把最后一批脏的域名历史补写掉
+            // 停止浏览后 ingest 不再产出批次，这里兜底把最后的脏数据补写掉
             flushDomainHistoryIfNeeded()
+            flushRuleHitStatsIfNeeded()
         }
     }
 
@@ -1252,10 +1297,16 @@ public final class AppState {
             connectionTracker.connections[i].targetHost = domain
             let r = resolver ?? currentMatchedRuleResolver()
             resolver = r
-            connectionTracker.connections[i].matchedRule = r.resolve(
+            let res = r.resolveDetailed(
                 host: domain,
                 route: DomainAnalyzer.routeCategory(connectionTracker.connections[i].route)
             )
+            // 命中计数补记：ingest 时这条还是裸 IP（多半没认领任何用户规则），翻译成域名后
+            // 才命中域名规则。只在回填**改变了**认领结果时补记，避免同一连接重复计数。
+            if res.userRuleID != nil, res.ruleText != connectionTracker.connections[i].matchedRule {
+                recordRuleHit(res.userRuleID, at: connectionTracker.connections[i].openedAt)
+            }
+            connectionTracker.connections[i].matchedRule = res.ruleText
         }
     }
 
@@ -1290,10 +1341,11 @@ public final class AppState {
             }
             // matchedRule 回填：用户规则一致才认领，否则推断 xray 内置规则 / 「未命中」哨兵。
             // 必须在 FakeDNS 翻译**之后**做，否则拿假 IP 去匹配域名规则全落空。
-            conn.matchedRule = resolver.resolve(
+            let resolution = resolver.resolveDetailed(
                 host: conn.targetHost,
                 route: DomainAnalyzer.routeCategory(conn.route)
             )
+            conn.matchedRule = resolution.ruleText
             // 源端口 → 来源 App（macOS content filter 标注的 bundle id）
             if let port = entry.sourceAddress.split(separator: ":").last.map(String.init),
                let bundleID = sourceAppMap[port] {
@@ -1304,6 +1356,8 @@ public final class AppState {
             // 不算新访问），否则「连接次数」会被灌水，和连接页的观感也对不上。
             if connectionTracker.ingest(conn) {
                 newConnections.append(conn)
+                // 命中计数：与域名历史同口径，只算 tracker 判定的新连接（重现不灌水）
+                recordRuleHit(resolution.userRuleID, at: conn.openedAt)
             }
         }
         recordDomainHistory(newConnections)
@@ -1333,6 +1387,26 @@ public final class AppState {
         domainHistorySavedAt = now
         domainHistoryDirty = false
         persistence.saveAsync(domainHistory, name: Self.domainHistoryFile)
+    }
+
+    /// 记一次用户规则命中（id 为 nil = 这条连接没认领任何用户规则，直接忽略）。
+    /// 节流落盘同 domainHistory 模式。internal 供单测直接驱动（ingest 依赖 App Group 文件）。
+    func recordRuleHit(_ id: UUID?, at date: Date) {
+        guard let id else { return }
+        ruleHitStats.recordHit(id, at: date)
+        ruleHitStats.prune()
+        ruleHitStatsDirty = true
+        flushRuleHitStatsIfNeeded()
+    }
+
+    /// 有脏数据且距上次落盘 ≥ 节流间隔时写盘；轮询循环每轮兜底调用（同 domainHistory）。
+    func flushRuleHitStatsIfNeeded() {
+        guard ruleHitStatsDirty else { return }
+        let now = Date()
+        guard now.timeIntervalSince(ruleHitStatsSavedAt) >= ruleHitStatsSaveInterval else { return }
+        ruleHitStatsSavedAt = now
+        ruleHitStatsDirty = false
+        persistence.saveAsync(ruleHitStats, name: Self.ruleHitStatsFile)
     }
 
     /// 取当前规则集 + 代理模式对应的 matchedRule 回填器；输入没变时复用同一实例

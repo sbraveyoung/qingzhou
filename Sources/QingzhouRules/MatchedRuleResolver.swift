@@ -20,10 +20,22 @@ import QingzhouCore
 /// 规则集 / proxyMode 变化时由持有方（AppState）换一个新实例，缓存随之作废。
 public final class MatchedRuleResolver {
 
+    /// 一次回填的完整结果：规则文本 + （仅认领用户规则时）该规则的 id。
+    /// id 供命中计数埋点（RuleHitStats）用 —— 文本会因去重/改目标变化，id 是稳定键。
+    public struct Resolution: Sendable, Equatable {
+        public let ruleText: String
+        public let userRuleID: UUID?
+
+        public init(ruleText: String, userRuleID: UUID? = nil) {
+            self.ruleText = ruleText
+            self.userRuleID = userRuleID
+        }
+    }
+
     private let engine: RuleEngine
     private let mode: ProxyMode
     private let cacheLimit: Int
-    private var cache: [String: String] = [:]
+    private var cache: [String: Resolution] = [:]
 
     public init(rules: [Rule], mode: ProxyMode,
                 geoip: GeoIPResolver = NoopGeoIPResolver(), cacheLimit: Int = 4096) {
@@ -39,6 +51,11 @@ public final class MatchedRuleResolver {
     ///   - host: 目标域名或 IP（FakeDNS 假 IP 应先翻译回域名再传入）。
     ///   - route: 实际路由结果（由 access log 的 outboundTag 归类，见 `DomainAnalyzer.routeCategory`）。
     public func resolve(host: String, route: DomainRoute) -> String {
+        resolveDetailed(host: host, route: route).ruleText
+    }
+
+    /// 同 `resolve`，额外带回认领的用户规则 id（命中计数埋点用）。
+    public func resolveDetailed(host: String, route: DomainRoute) -> Resolution {
         let key = "\(host)|\(route.rawValue)"
         if let hit = cache[key] { return hit }
         let result = compute(host: host, route: route)
@@ -49,34 +66,34 @@ public final class MatchedRuleResolver {
 
     // MARK: - 私有
 
-    private func compute(host: String, route: DomainRoute) -> String {
-        // 1) 用户规则：命中了非 FINAL 规则、且判定与实际路由一致 → 认领
+    private func compute(host: String, route: DomainRoute) -> Resolution {
+        // 1) 用户规则：命中了非 FINAL 规则、且判定与实际路由一致 → 认领（带 id）
         let match = engine.match(MatchContext(host: host))
         if match.rule.type != .final, Self.agrees(match.rule.target, route) {
-            return match.rule.lineForm
+            return Resolution(ruleText: match.rule.lineForm, userRuleID: match.rule.id)
         }
 
         // 2) xray 内置规则推断（与 XrayConfigComposer.buildRouting 一一对应）
         switch mode {
         case .direct:
-            return "直连模式（DIRECT）"
+            return Resolution(ruleText: "直连模式（DIRECT）")
         case .global:
             // global 模式唯一的直连是内置局域网 CIDR；其余全走代理
-            return route == .direct ? "局域网直连（内置）" : "全局模式（GLOBAL）"
+            return Resolution(ruleText: route == .direct ? "局域网直连（内置）" : "全局模式（GLOBAL）")
         case .rule:
             // 括号注解是给用户看的人话 —— 验收反馈「为什么有被拒绝的」：光给 geosite
             // 标识看不懂。程序侧别对这些文本做前缀/全等匹配，认标识部分即可。
             switch route {
             case .reject:
-                return "geosite:category-ads-all（内置广告拦截）"
+                return Resolution(ruleText: "geosite:category-ads-all（内置广告拦截）")
             case .direct:
-                if Self.isPrivateHost(host) { return "geoip:private（内置局域网直连）" }
-                return Self.isIPLiteral(host)
+                if Self.isPrivateHost(host) { return Resolution(ruleText: "geoip:private（内置局域网直连）") }
+                return Resolution(ruleText: Self.isIPLiteral(host)
                     ? "geoip:cn（内置国内 IP 直连）"
-                    : "geosite:cn（内置国内域名直连）"
+                    : "geosite:cn（内置国内域名直连）")
             case .proxy, .mixed:
                 // 只命中了「其余走代理」的兜底 → 明确的「未命中」语义值，不是空串
-                return Connection.noMatchedRule
+                return Resolution(ruleText: Connection.noMatchedRule)
             }
         }
     }

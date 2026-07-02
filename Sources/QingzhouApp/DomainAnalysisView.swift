@@ -11,6 +11,8 @@ public struct DomainAnalysisView: View {
     /// 域名关键字搜索：作用于所有 tab（页内搜索框 —— 本页是 sheet，
     /// macOS 上 .searchable 在 sheet 的 toolbar 里没有稳定落点，页内框两平台一致）。
     @State private var keyword = ""
+    /// 点中的域名行 → 趋势详情页（sheet 内 push）。
+    @State private var selectedStat: DomainStat?
     #if os(macOS)
     /// 「应用」tab 是否可用 = 内容过滤扩展（来源 App 标注）当前已启用。
     /// 跟随运行时开关而不是编译期 flag —— 用户在设置里关掉标注后，这个 tab 应当消失。
@@ -43,12 +45,15 @@ public struct DomainAnalysisView: View {
         let digests = state.domainHistory.digests(excludingBareIPs: hideBareIPs)
             .compactMap { $0.filtered(byDomainKeyword: kw) }
         let suggestions = DomainAnalyzer.suggestions(stats)
+        // 「可合并规则」建议：来自自定义规则本身（与连接数据无关），跟随搜索关键字过滤
+        let merges = RuleConsolidator.mergeSuggestions(customRules: state.customRules)
+            .filter { kw.isEmpty || $0.domain.contains(kw) }
 
         List {
             Picker("", selection: $mode) {
                 Text("域名").tag(0)
                 Text("每日").tag(1)
-                Text("建议 \(suggestions.count)").tag(2)
+                Text("建议 \(suggestions.count + merges.count)").tag(2)
                 // 「应用」视角只在 macOS 有（iOS 拿不到进程归属，需 MDM 监督）。
                 // tab 常驻：来源 App 标注没开时不藏 tab，在 tab 内给开启指引 ——
                 // 藏起来用户不知道有这个能力（验收反馈定的交互）。
@@ -83,6 +88,11 @@ public struct DomainAnalysisView: View {
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             .listRowSeparator(.hidden)
 
+            // DoH 检测：裸 IP 连接占比异常高时说明原因（可关闭，与连接页共用会话级状态）
+            if DoHNoticeBanner.shouldShow(state: state) {
+                DoHNoticeBanner(state: state)
+                    .listRowSeparator(.hidden)
+            }
             // 过滤生效时的轻提示，避免用户忘了开着过滤、以为数据少了
             if hiddenIPCount > 0 {
                 HStack(spacing: 4) {
@@ -100,6 +110,26 @@ public struct DomainAnalysisView: View {
                 if stats.isEmpty && searching {
                     searchEmptyState
                 } else {
+                    // 「今日新增」：今天首次出现、且 30 天历史里没见过的主域名（有才显示）。
+                    // 数据源是持久化历史而不是内存连接 —— 重启后今天更早的新面孔也在。
+                    let newToday = state.domainHistory
+                        .newTodayStats(excludingBareIPs: hideBareIPs)
+                        .filter { kw.isEmpty || $0.domain.lowercased().contains(kw) }
+                    if !newToday.isEmpty {
+                        Section {
+                            ForEach(newToday.prefix(8)) { domainRow($0) }
+                            if newToday.count > 8 {
+                                Text("… 还有 \(newToday.count - 8) 个（按连接次数排序，仅显示前 8）")
+                                    .font(.caption2).foregroundStyle(.tertiary)
+                            }
+                        } header: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles")
+                                Text("今日新增 · \(newToday.count) 个域名（30 天内首次出现）")
+                            }
+                            .textCase(nil)
+                        }
+                    }
                     Section("按连接次数排序 · \(stats.count) 个域名") {
                         ForEach(stats) { domainRow($0) }
                     }
@@ -138,15 +168,23 @@ public struct DomainAnalysisView: View {
                     .foregroundStyle(.orange)
                     .listRowSeparator(.hidden)
                 }
-                if suggestions.isEmpty {
+                // 可合并规则：规则表自身的收敛建议，不依赖连接数据、不受代理模式影响（不弱化）
+                if !merges.isEmpty {
+                    Section("可合并的自定义规则") {
+                        ForEach(merges) { mergeRow($0) }
+                    }
+                }
+                if suggestions.isEmpty && merges.isEmpty {
                     if searching {
                         searchEmptyState
                     } else {
                         ContentUnavailableView("暂无优化建议", systemImage: "checkmark.seal",
                                                description: Text("当前域名的代理/直连分流看起来都合理。"))
                     }
-                } else {
-                    ForEach(suggestions) { suggestionRow($0).opacity(modeNotice == nil ? 1 : 0.55) }
+                } else if !suggestions.isEmpty {
+                    Section(merges.isEmpty ? "" : "分流建议") {
+                        ForEach(suggestions) { suggestionRow($0).opacity(modeNotice == nil ? 1 : 0.55) }
+                    }
                 }
             default:
                 #if os(macOS)
@@ -157,9 +195,17 @@ public struct DomainAnalysisView: View {
             }
         }
         .navigationTitle("域名分析")
+        // 域名行 → 趋势详情（本页在 ConnectionsView 的 sheet 内、外层已有 NavigationStack，直接 push）
+        .navigationDestination(item: $selectedStat) { s in
+            DomainDetailView(state: state, stat: s)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 IgnoreIPToggle(isOn: $hideBareIPs)
+            }
+            ToolbarItem {
+                // 导出当前过滤视图（搜索 + 忽略 IP 生效后的域名聚合），空数据禁用
+                DomainStatsExportButton(stats: stats, state: state)
             }
         }
         #if os(macOS)
@@ -195,9 +241,19 @@ public struct DomainAnalysisView: View {
             HStack(spacing: 8) {
                 routeBadge(s.route)
                 Text(s.domain).font(.subheadline).fontWeight(.medium).lineLimit(1)
+                // 追踪器徽章（灰紫色，与建议页「建议拒绝」同色系）
+                if TrackerDomains.isTracker(s.domain) {
+                    Text("追踪器")
+                        .font(.caption2).fontWeight(.medium)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Self.trackerColor.opacity(0.16), in: Capsule())
+                        .foregroundStyle(Self.trackerColor)
+                }
                 Spacer()
                 // 流量字节在接上 QueryStats 前恒 0，不显示假 0B；先用连接次数当主指标
                 Text("\(s.connectionCount) 次").font(.caption.monospaced()).foregroundStyle(.secondary)
+                // 可点进详情的示意（List 行手动 push 没有系统自带的 chevron）
+                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
             }
             HStack(spacing: 8) {
                 if DomainAnalyzer.isUnmatchedRule(s.lastMatchedRule) {
@@ -208,6 +264,9 @@ public struct DomainAnalysisView: View {
             }
         }
         .padding(.vertical, 2)
+        // 点击进趋势详情；长按菜单 / 左滑 / 右键的一键规则不受影响
+        .contentShape(Rectangle())
+        .onTapGesture { selectedStat = s }
         // 一键规则：iOS 长按/左滑，macOS 右键 →「加入直连 / 代理 / 拒绝」
         .quickRuleActions(host: s.domain, state: state)
     }
@@ -270,6 +329,32 @@ public struct DomainAnalysisView: View {
     }
     #endif
 
+    /// 「可合并规则」行：列出将被替换的散规则 + 合并后形态，一键应用。
+    /// 合并是放宽匹配（DOMAIN 精确 → SUFFIX 覆盖子域名），文案里说明白，由用户决定。
+    private func mergeRow(_ m: RuleMergeSuggestion) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "arrow.triangle.merge").foregroundStyle(.purple).font(.title3)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(m.domain).font(.subheadline).fontWeight(.medium)
+                ForEach(m.rules) { r in
+                    Text(r.lineForm)
+                        .font(.caption2.monospaced()).foregroundStyle(.tertiary)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                Text("→ \(m.mergedLineForm)")
+                    .font(.caption2.monospaced()).foregroundStyle(.purple)
+                    .lineLimit(1).truncationMode(.middle)
+                Text("同域名 \(m.rules.count) 条同目标规则，可收敛为一条后缀规则（覆盖全部子域名）")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("合并") { state.applyRuleMerge(m) }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(.vertical, 2)
+    }
+
     private func suggestionRow(_ s: RuleSuggestion) -> some View {
         let (icon, color) = badge(for: s.kind)
         return HStack(alignment: .top, spacing: 10) {
@@ -324,7 +409,11 @@ public struct DomainAnalysisView: View {
         switch kind {
         case .shouldProxy:  return ("arrow.up.right.circle", .blue)
         case .shouldDirect: return ("arrow.down.right.circle", .green)
+        case .shouldReject: return ("nosign", Self.trackerColor)
         case .unmatched:    return ("questionmark.circle", .orange)
         }
     }
+
+    /// 追踪器徽章的灰紫色：比 .purple 更沉一点，和路由徽章的红/绿/蓝区分开、不抢眼。
+    static let trackerColor = Color(red: 0.55, green: 0.48, blue: 0.72)
 }

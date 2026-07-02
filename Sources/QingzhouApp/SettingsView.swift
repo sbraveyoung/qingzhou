@@ -18,10 +18,48 @@ public struct SettingsView: View {
             macIntegrationSection
             #endif
             iCloudSection
+            diagnosticsSection
             aboutSection
         }
         .navigationTitle("设置")
         .formStyle(.grouped)
+    }
+
+    /// 诊断：隧道扩展进程的内存水位。iOS 对 NE 扩展有 50MB jetsam 硬上限，超限即"断流"——
+    /// 高速测速 / 大流量下载是竞品翻车的典型场景，这里给用户/开发者一个随时可查的数字。
+    private var diagnosticsSection: some View {
+        Section("诊断") {
+            if let mem = state.tunnelMemory, state.tunnelMemoryIsLive {
+                LabeledContent("扩展内存",
+                               value: "\(ByteFormatter.format(mem.footprintBytes))"
+                               + " · 峰值 \(ByteFormatter.format(mem.sessionPeakBytes))")
+                Text(memoryCaption(mem))
+                    .font(.caption2).foregroundStyle(mem.warningCount > 0 ? .orange : .secondary)
+            } else if let mem = state.tunnelMemory {
+                LabeledContent("扩展内存", value: "VPN 未运行")
+                Text("上次会话峰值 \(ByteFormatter.format(mem.sessionPeakBytes))"
+                     + " · 历史最高 \(ByteFormatter.format(mem.allTimePeakBytes))"
+                     + (mem.limitBytes > 0 ? "（上限 \(ByteFormatter.format(mem.limitBytes))）" : ""))
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else {
+                LabeledContent("扩展内存", value: "暂无数据")
+                Text("开启 VPN 后这里显示隧道扩展的实时内存占用与峰值。")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func memoryCaption(_ mem: TunnelMemoryStats) -> String {
+        var parts: [String] = []
+        if mem.limitBytes > 0 {
+            let headroom = max(0, mem.limitBytes - mem.footprintBytes)
+            parts.append("距 \(ByteFormatter.format(mem.limitBytes)) 上限余 \(ByteFormatter.format(headroom))")
+        }
+        parts.append("历史最高 \(ByteFormatter.format(mem.allTimePeakBytes))")
+        if mem.warningCount > 0 {
+            parts.append("本次会话越过 40 MB 告警线 \(mem.warningCount) 次")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private var proxySection: some View {

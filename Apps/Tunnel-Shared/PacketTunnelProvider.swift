@@ -53,6 +53,16 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private let statsQueue = DispatchQueue(label: "com.sbraveyoung.qingzhou.tunnel.stats")
     private var lastReportAt: Date?
 
+    /// 扩展内存观测（iOS 对 NE 扩展有 50 MiB phys_footprint 的 jetsam 硬上限，超限即"断流"）。
+    /// 随 stats 定时器每秒采一次（一次 mach call，微秒级），写 App Group 给主 App 显示。
+    /// 以下状态**只在 statsQueue 上碰**，无需加锁。峰值跨 reconfigure 延续（进程级观测）。
+    private var memSessionPeak: Int64 = 0
+    private var memAllTimePeak: Int64 = 0
+    private var memAllTimePeakLoaded = false   // 历史峰值只从上次落盘读一次
+    private var memWarningCount = 0
+    private var memInWarningZone = false       // 迟滞：越线记一次，回落 4MB 后再越才再计
+    private static let memWarnThreshold: Int64 = 40 * 1024 * 1024
+
     /// FakeDNS 映射「假 IP → 域名」。从 xray 发回 App 的 DNS 响应里解析出来（见 captureFakeDNS），
     /// 随 reportTrafficStats 一起写进 App Group，主 App 用它把 access log 的假 IP 翻回域名。
     private let fakeDNSMap = OSAllocatedUnfairLock(initialState: [String: String]())
@@ -475,6 +485,58 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         if !map.isEmpty, let mData = try? JSONEncoder().encode(map),
            let mJSON = String(data: mData, encoding: .utf8) {
             TunnelAppGroup.writeFakeDNSMap(mJSON)
+        }
+        // 内存观测顺带跑（同在 statsQueue，一次 mach call）—— 50MB jetsam 线的哨兵
+        reportMemoryStats(at: now)
+    }
+
+    /// 内存采样 + 上报（statsQueue 上跑）。采样失败静默跳过本轮 —— 观测缺席不影响 VPN。
+    /// 先量化再优化：footprint（jetsam 判定依据）、会话峰值、跨会话历史峰值、40MB 预警。
+    private func reportMemoryStats(at now: Date) {
+        guard let footprint = MemoryFootprint.currentFootprint() else { return }
+
+        // 历史最高峰值跨会话延续：第一次采样时从上次落盘的 memory-stats 读回来接着比。
+        // 用途：用户报「断流」时，看历史峰值是否顶到过 50MB —— 有据可查。
+        if !memAllTimePeakLoaded {
+            memAllTimePeakLoaded = true
+            if let json = TunnelAppGroup.readMemoryStatsJSON(),
+               let data = json.data(using: .utf8) {
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .iso8601
+                if let prev = try? decoder.decode(TunnelMemoryStats.self, from: data) {
+                    memAllTimePeak = prev.allTimePeakBytes
+                }
+            }
+        }
+        memSessionPeak = max(memSessionPeak, footprint)
+        memAllTimePeak = max(memAllTimePeak, memSessionPeak)
+
+        // 接近上限预警（40MB，距 jetsam 线还剩 10MB）。带 4MB 迟滞：越线只记一次，
+        // 回落到 36MB 以下才重新武装 —— 避免在阈值附近抖动时每秒刷一条日志。
+        if footprint >= Self.memWarnThreshold {
+            if !memInWarningZone {
+                memInWarningZone = true
+                memWarningCount += 1
+                os_log("⚠️ memory footprint %lld MB ≥ 40 MB warn threshold (iOS jetsam limit 50 MB), warning #%d this session",
+                       log: log, type: .error, footprint / (1024 * 1024), memWarningCount)
+            }
+        } else if footprint < Self.memWarnThreshold - 4 * 1024 * 1024 {
+            memInWarningZone = false
+        }
+
+        let stats = TunnelMemoryStats(
+            footprintBytes: footprint,
+            availableBytes: MemoryFootprint.availableMemory(),
+            sessionPeakBytes: memSessionPeak,
+            allTimePeakBytes: memAllTimePeak,
+            limitBytes: MemoryFootprint.platformLimitBytes,
+            warningCount: memWarningCount,
+            sampledAt: now
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601   // 与主 App AppGroupStorage.read 的解码策略一致
+        if let data = try? encoder.encode(stats), let json = String(data: data, encoding: .utf8) {
+            TunnelAppGroup.writeMemoryStats(json)
         }
     }
 

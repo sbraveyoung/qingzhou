@@ -115,6 +115,10 @@ public struct ConnectionsView: View {
             }
             visible.append(c)
         }
+        // 「已关闭」按关闭时间倒序 —— 刚关闭的在最上面；其他分组保持摄入序（新连接在前）
+        if filter == .closed {
+            visible.sort { ($0.closedAt ?? .distantPast) > ($1.closedAt ?? .distantPast) }
+        }
         return (visible, hiddenIP)
     }
 
@@ -143,7 +147,12 @@ public struct ConnectionsView: View {
                 Label(ByteFormatter.format(c.downloadBytes), systemImage: "arrow.down")
                 Text("\(ByteFormatter.format(c.uploadSpeedBps))/s · \(ByteFormatter.format(c.downloadSpeedBps))/s")
                 Spacer()
-                Text(c.openedAt.formatted(.relative(presentation: .named)))
+                // 活跃连接显示建立时间；已关闭的显示关闭时间（更有信息量）
+                if let closedAt = c.closedAt {
+                    Text("关闭于 \(closedAt.formatted(.relative(presentation: .named)))")
+                } else {
+                    Text(c.openedAt.formatted(.relative(presentation: .named)))
+                }
             }
             .font(.caption2.monospaced()).foregroundStyle(.secondary)
             HStack(spacing: 6) {

@@ -52,41 +52,98 @@ public struct RootView: View {
 
     #if os(iOS)
     private var iOSRoot: some View {
-        // 超过 5 个 tab 时 iPhone 会自动把多出来的塞进 "More" tab。
-        TabView {
+        // iPhone 的 tab bar 只放得下 5 个，多了会被塞进 "More" tab（设置/日志曾因此
+        // 藏了两层）。收敛到 5：连接页挂在首页流量卡的「查看连接明细」入口（push），
+        // 日志挂在设置页的「日志」入口（push）；macOS 侧栏不受限，保持全量列表。
+        // 规则和订阅不合并 —— 一个是路由策略、一个是节点来源，语义无关。
+        // selection 绑定 state.activeSection —— 首页空态按钮等可编程式切 tab。
+        TabView(selection: iOSTabBinding) {
             NavigationStack { HomeView(state: state) }
                 .tabItem { Label("首页", systemImage: "house") }
+                .tag(AppSection.home)
             NavigationStack { NodesView(state: state) }
                 .tabItem { Label("节点", systemImage: "server.rack") }
+                .tag(AppSection.nodes)
             NavigationStack { SubscriptionsView(state: state) }
                 .tabItem { Label("订阅", systemImage: "tray.full") }
+                .tag(AppSection.subscriptions)
             NavigationStack { RulesView(state: state) }
                 .tabItem { Label("规则", systemImage: "list.bullet.rectangle") }
-            NavigationStack { ConnectionsView(state: state) }
-                .tabItem { Label("连接", systemImage: "antenna.radiowaves.left.and.right") }
-            NavigationStack { LogsView(state: state) }
-                .tabItem { Label("日志", systemImage: "doc.text.magnifyingglass") }
+                .tag(AppSection.rules)
             NavigationStack { SettingsView(state: state) }
                 .tabItem { Label("设置", systemImage: "gearshape") }
+                .tag(AppSection.settings)
         }
+    }
+
+    /// iOS 只有 5 个 tab：activeSection 被设成非 tab 页（连接/日志）时就近落到
+    /// 承载它入口的 tab（连接→首页、日志→设置），不让 TabView 拿到无 tag 可匹配的值。
+    private var iOSTabBinding: Binding<AppSection> {
+        Binding(
+            get: {
+                switch state.activeSection {
+                case .connections: return .home
+                case .logs:        return .settings
+                default:           return state.activeSection
+                }
+            },
+            set: { state.activeSection = $0 }
+        )
     }
     #else
     private var macOSRoot: some View {
+        // 侧栏由 push 式 NavigationLink 改为 selection 驱动：detail 跟随
+        // state.activeSection 切换，任意视图（首页空态按钮 / 菜单栏等）都能编程式换页。
         NavigationSplitView {
-            List {
-                NavigationLink("首页") { HomeView(state: state) }
-                NavigationLink("节点") { NodesView(state: state) }
-                NavigationLink("订阅") { SubscriptionsView(state: state) }
-                NavigationLink("规则") { RulesView(state: state) }
-                NavigationLink("连接") { ConnectionsView(state: state) }
-                NavigationLink("日志") { LogsView(state: state) }
-                NavigationLink("设置") { SettingsView(state: state) }
+            List(selection: sidebarSelectionBinding) {
+                ForEach(AppSection.allCases, id: \.self) { section in
+                    Text(section.sidebarTitle).tag(section)
+                }
             }
             .navigationTitle("VPN")
             .frame(minWidth: 180)
         } detail: {
-            HomeView(state: state)
+            // 包一层 NavigationStack：detail 内的 navigationDestination push（如流量卡
+            // →连接明细）才有宿主。
+            NavigationStack {
+                detailView(for: state.activeSection)
+            }
+        }
+    }
+
+    /// List(selection:) 要 Optional Binding；置 nil（点空白处取消选中）时保持当前页不变。
+    private var sidebarSelectionBinding: Binding<AppSection?> {
+        Binding(
+            get: { state.activeSection },
+            set: { if let section = $0 { state.activeSection = section } }
+        )
+    }
+
+    @ViewBuilder private func detailView(for section: AppSection) -> some View {
+        switch section {
+        case .home:          HomeView(state: state)
+        case .nodes:         NodesView(state: state)
+        case .subscriptions: SubscriptionsView(state: state)
+        case .rules:         RulesView(state: state)
+        case .connections:   ConnectionsView(state: state)
+        case .logs:          LogsView(state: state)
+        case .settings:      SettingsView(state: state)
         }
     }
     #endif
+}
+
+extension AppSection {
+    /// macOS 侧栏显示名。
+    var sidebarTitle: String {
+        switch self {
+        case .home:          return "首页"
+        case .nodes:         return "节点"
+        case .subscriptions: return "订阅"
+        case .rules:         return "规则"
+        case .connections:   return "连接"
+        case .logs:          return "日志"
+        case .settings:      return "设置"
+        }
+    }
 }

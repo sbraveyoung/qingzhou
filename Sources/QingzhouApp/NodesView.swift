@@ -13,6 +13,9 @@ public struct NodesView: View {
     @State private var detailNode: Node?
     @State private var isMeasuring = false
     @State private var isAutoSelecting = false
+    /// 本轮批量测速的总数（开测那刻的非排除节点数）。配合 measuringNodeIds 的
+    /// 剩余量算出「12/47」进度 —— measuringNodeIds 只知道还剩几个，不知道总共几个。
+    @State private var measureTotal = 0
     /// 自动择优完成后短暂显示的反馈条 —— 不弹 alert，省得用户被打断。
     @State private var autoSelectMessage: String?
 
@@ -36,9 +39,7 @@ public struct NodesView: View {
         // 自带逐行转圈 + 「上次测速 刚刚」的可见反馈。
         .refreshable {
             guard !isMeasuring, !isAutoSelecting else { return }
-            isMeasuring = true
-            await state.measureAllNodes()
-            isMeasuring = false
+            await runBatchMeasure()
         }
         .searchable(text: $searchText, prompt: "搜索节点 / 主机 / 协议")
         .toolbar {
@@ -50,14 +51,16 @@ public struct NodesView: View {
             }
             ToolbarItem {
                 Button {
-                    Task {
-                        isMeasuring = true
-                        await state.measureAllNodes()
-                        isMeasuring = false
-                    }
+                    Task { await runBatchMeasure() }
                 } label: {
                     if isMeasuring {
-                        ProgressView().controlSize(.small)
+                        // 测速中按钮变进度态：「12/47」告诉用户测到哪了，而不是干转圈
+                        HStack(spacing: 4) {
+                            ProgressView().controlSize(.small)
+                            Text("\(measureDone)/\(measureTotal)")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         Label("测速", systemImage: "speedometer")
                     }
@@ -105,6 +108,24 @@ public struct NodesView: View {
         #if os(iOS)
         .sheet(isPresented: $showScanner) { scannerSheet }
         #endif
+        // 批量测速完成时一记 .success（iOS 触觉；macOS no-op）—— 用户等的是这个时刻
+        .sensoryFeedback(.success, trigger: isMeasuring) { wasMeasuring, now in
+            wasMeasuring && !now
+        }
+    }
+
+    /// 批量测速（工具栏按钮 / 下拉刷新共用）：记下总数，进度随 measuringNodeIds 递减。
+    private func runBatchMeasure() async {
+        isMeasuring = true
+        // 与 measureAllNodes 的待测集合同口径（非排除节点）
+        measureTotal = state.nodes.filter { !$0.isExcluded }.count
+        await state.measureAllNodes()
+        isMeasuring = false
+    }
+
+    /// 已测完个数 = 总数 - 还在测的。钳位到 0 防御 total 没记上的边界。
+    private var measureDone: Int {
+        max(0, measureTotal - state.measuringNodeIds.count)
     }
 
     private var filtered: [Node] {

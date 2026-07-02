@@ -22,6 +22,9 @@ public struct RulesView: View {
         }
         .navigationTitle("规则")
         .searchable(text: $searchText, prompt: "搜索规则")
+        // 规则添加成功一记 .success（iOS 触觉；macOS no-op）。用条数增长当触发器 ——
+        // 删除（减少）不响，避免误报
+        .sensoryFeedback(.success, trigger: state.customRules.count) { old, new in new > old }
         .task {
             if state.remoteRules.isEmpty {
                 await refreshRemote()

@@ -55,6 +55,14 @@ public struct HomeView: View {
             ConnectionsView(state: state)
         }
         #endif
+        // 触觉反馈（iOS；macOS 上这些反馈类型是 no-op）：
+        // 开成功 .success、失败 .error、手动关一记轻 impact。只挂关键节点，不滥用。
+        .sensoryFeedback(trigger: state.isVPNRunning) { wasOn, isOn in
+            if isOn && !wasOn { return .success }
+            if wasOn && !isOn { return .impact(weight: .light) }
+            return nil
+        }
+        .sensoryFeedback(.error, trigger: state.tunnelError) { _, new in new != nil }
     }
 
     // MARK: - 卡片

@@ -108,6 +108,10 @@ public struct NodesView: View {
         #if os(iOS)
         .sheet(isPresented: $showScanner) { scannerSheet }
         #endif
+        // 批量测速完成时一记 .success（iOS 触觉；macOS no-op）—— 用户等的是这个时刻
+        .sensoryFeedback(.success, trigger: isMeasuring) { wasMeasuring, now in
+            wasMeasuring && !now
+        }
     }
 
     /// 批量测速（工具栏按钮 / 下拉刷新共用）：记下总数，进度随 measuringNodeIds 递减。

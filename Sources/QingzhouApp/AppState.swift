@@ -69,6 +69,9 @@ public final class AppState {
     private var accessLogPollingTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
     private var ipRefreshTask: Task<Void, Never>?
+    /// 热切换进行中又来了新的切换请求（快速连点节点）：记 pending，当前轮收尾后再跑一轮。
+    /// 不并发跑两个 reapply —— stop/start 交错会打架。
+    private var pendingReapply = false
     /// access log 文件已读到的字节位置（增量读，不重复解析）。
     private var accessLogOffset: UInt64 = 0
     /// appex 写的「假 IP → 域名」映射（FakeDNS），把 access log 的 198.18.x.x 翻回域名。
@@ -365,23 +368,31 @@ public final class AppState {
     /// 这样自动择优 / 手动选节点能立即生效，不用用户手动关开 VPN 开关。
     ///
     /// 注：NetworkExtension 没有「热 reload 配置」的同步 API —— 改了 providerConfiguration
-    /// 必须断开重连才生效。所以这里是 stop → 短暂等连接断开 → start，会有不到 1 秒的断流。
-    /// （需真机验证这个时序在你的网络下是否够稳。）
+    /// 必须断开重连才生效。所以这里是 stop → 等连接断开 → start，会有短暂断流；
+    /// 期间 isSwitchingTunnel = true，UI 开关滑到关 + 显示"切换中…"。
+    ///
+    /// 防抖：切换进行中再次调用只记 pending；当前轮收尾后发现 pending 就再跑一轮，
+    /// 状态里已是最新节点/模式，自动收敛到用户的最终选择。
     public func reapplyRunningTunnel() async {
+        if isSwitchingTunnel {
+            pendingReapply = true
+            return
+        }
+        repeat {
+            pendingReapply = false
+            await performReapply()
+        } while pendingReapply
+    }
+
+    private func performReapply() async {
         guard isVPNRunning,
               let node = currentNode,
               let shareLink = NodeEncoder.shareLink(node) else { return }
+        isSwitchingTunnel = true
+        defer { isSwitchingTunnel = false }
         // ⚠️ 原地无感重配（reconfigureInPlace + 扩展 handleAppMessage）暂时禁用 —— 实测在
         // 某些切换（规则→全局）上会让 xray 卡死、之后连全量重启都救不回来，疑似 xray-core
         // 在同一扩展进程内 stop→run 有全局状态没干净复位。扩展侧代码保留待查，这里先走全量重启。
-        // 待真机拿到 xray 的具体报错后再启用（把下面注释掉的块恢复即可）。
-        // do {
-        //     try await tunnelManager.reconfigureInPlace(node: node, mode: settings.proxyMode, shareLink: shareLink)
-        //     logger.info("Seamless switch → \(node.name) / \(settings.proxyMode.rawValue)", category: "tunnel")
-        //     return
-        // } catch {
-        //     logger.warn("In-place switch failed；回退全量重启", category: "tunnel")
-        // }
         do {
             try await tunnelManager.configure(
                 node: node,
@@ -402,6 +413,13 @@ public final class AppState {
         } catch {
             tunnelError = (error as? LocalizedError)?.errorDescription ?? "\(error)"
             logger.error("Hot-switch failed: \(tunnelError ?? "?")", category: "tunnel")
+            // 隧道确实死了：开关诚实地留在关位（修掉旧行为——失败后开关仍显示"开"）。
+            // 和 startTunnel 的失败路径一样干净收尾：关 On-Demand 防止拿坏配置反复重连，
+            // 再 stop() 让系统回收 TUN / 路由。pending 也作废——VPN 已关，等用户重新开。
+            isVPNRunning = false
+            pendingReapply = false
+            try? await tunnelManager.setOnDemandEnabled(false)
+            tunnelManager.stop()
         }
     }
 

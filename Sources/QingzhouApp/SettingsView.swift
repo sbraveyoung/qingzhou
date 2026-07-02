@@ -22,6 +22,18 @@ public struct SettingsView: View {
         }
         .navigationTitle("设置")
         .formStyle(.grouped)
+        // 「立即恢复」的版本选择 sheet。两条呈现纪律（复验 #18 两轮打回换来的）：
+        // 1. 挂在 Form 顶层，**不要挂进 Section** —— iOS 的 Form 是惰性容器（UICollectionView），
+        //    cell 重渲染会重建 hosting view，呈现动画中的 sheet 会被连带 dismiss（弹出即沉）。
+        // 2. isPresented 只依赖专用稳定 Bool —— 加载态 .loading→.loaded 落在呈现动画中，
+        //    binding 若依赖它，mid-transition 重渲染同样会打断呈现。
+        // onDismiss：sheet 完全收起后才把点选的候选交给确认 alert（挂在 RootView）——
+        // 收起动画中就置 cloudRestoreOffer 会撞呈现层，alert 被吞掉。
+        .sheet(isPresented: cloudVersionSheetBinding, onDismiss: {
+            state.presentPendingCloudRestoreOffer()
+        }) {
+            cloudVersionPicker
+        }
     }
 
     private var proxySection: some View {
@@ -250,15 +262,6 @@ public struct SettingsView: View {
                  + "\(CloudVaultStore.maxBackups) 份历史版本。不含连接记录与流量统计。")
                 .font(.caption2).foregroundStyle(.secondary)
         }
-        // 「立即恢复」的版本选择：云端当前版 + 历史版本，各带设备 / 时间 / 内容计数。
-        // onDismiss：sheet 完全收起后才把点选的候选交给确认 alert（挂在 RootView）——
-        // 在 sheet 收起动画中就置 cloudRestoreOffer 会撞呈现层，iOS 上 alert 被吞掉
-        // （真机现象：确认弹窗第一次自动消失，第二次才正常）。
-        .sheet(isPresented: cloudVersionSheetBinding, onDismiss: {
-            state.presentPendingCloudRestoreOffer()
-        }) {
-            cloudVersionPicker
-        }
     }
 
     /// iCloud 同步开关走专用方法 —— 开启时要立刻跑一次云端比对（可能提示恢复）。
@@ -269,9 +272,10 @@ public struct SettingsView: View {
         )
     }
 
+    /// 只读专用稳定 Bool（呈现开关），不读会中途变化的加载态 —— 见 body 上 sheet 的注释。
     private var cloudVersionSheetBinding: Binding<Bool> {
         Binding(
-            get: { state.cloudVersionLoad != nil },
+            get: { state.isCloudVersionSheetPresented },
             set: { if !$0 { state.dismissCloudVersionOptions() } }
         )
     }

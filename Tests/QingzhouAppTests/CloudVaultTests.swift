@@ -650,6 +650,54 @@ final class AppStateCloudVaultTests: XCTestCase {
         state.dismissCloudVersionOptions()       // sheet 不在屏（等价于读取中途被关掉）
         await state.loadCloudVersionOptions()
         XCTAssertNil(state.cloudVersionLoad, "sheet 已关，迟到的读取结果不能复活 sheet")
+        XCTAssertFalse(state.isCloudVersionSheetPresented)
+    }
+
+    /// 复验 #18 二次打回：sheet 弹出后立即自己沉下去。根因是 isPresented binding 依赖
+    /// 会中途变化的加载态（.loading→.loaded 落在呈现动画进行中，mid-transition 重渲染
+    /// 打断呈现簿记 / 重建 Form cell 的 hosting view）。修复后呈现开关是独立稳定 Bool：
+    /// **加载完成 / 失败都绝不能碰它**，只有显式关闭（取消 / 点选）才能关。
+    func testSheetPresenceStaysOnAcrossLoadTransitions() async throws {
+        // 成功路径：加载完成后呈现开关必须还开着
+        let store = makeStore()
+        var full = Persistence.Snapshot()
+        full.nodes = [try ProxyURLParser.parse("trojan://pw@a.example.com:443#n1")]
+        try await store.save(VaultDocument(revision: 1, modifiedAt: Date(), deviceName: "mac", snapshot: full))
+        let state = makeState(store: store)
+        XCTAssertFalse(state.isCloudVersionSheetPresented)
+        await state.requestManualCloudRestore()
+        XCTAssertTrue(state.isCloudVersionSheetPresented, ".loading→.loaded 不能收 sheet（弹出即沉的根因）")
+        XCTAssertNotNil(state.cloudVersionOptions)
+
+        // 失败路径（iCloud 不可用）：错误留在 sheet 内，呈现开关同样不能动
+        let state2 = makeState(
+            store: CloudVaultStore(containerProvider: { nil }), localDirName: "local2")
+        await state2.requestManualCloudRestore()
+        XCTAssertTrue(state2.isCloudVersionSheetPresented, ".loading→.failed 也不能收 sheet")
+        if case .failed = state2.cloudVersionLoad {} else {
+            XCTFail("应为 .failed，实际 \(String(describing: state2.cloudVersionLoad))")
+        }
+
+        // 只有显式关闭才关呈现开关
+        state.dismissCloudVersionOptions()
+        XCTAssertFalse(state.isCloudVersionSheetPresented)
+        XCTAssertNil(state.cloudVersionLoad)
+    }
+
+    /// 点选版本：呈现开关与内容态一起清（sheet 收起），候选暂存等 onDismiss 接棒。
+    func testChoosingCandidateClosesSheetPresence() async throws {
+        let store = makeStore()
+        var full = Persistence.Snapshot()
+        full.nodes = [try ProxyURLParser.parse("trojan://pw@a.example.com:443#n1")]
+        try await store.save(VaultDocument(revision: 1, modifiedAt: Date(), deviceName: "mac", snapshot: full))
+        let state = makeState(store: store)
+        await state.requestManualCloudRestore()
+        let option = try XCTUnwrap(state.cloudVersionOptions?.first)
+
+        state.chooseCloudRestoreCandidate(option)
+        XCTAssertFalse(state.isCloudVersionSheetPresented, "点选后 sheet 应收起")
+        XCTAssertNil(state.cloudVersionLoad)
+        XCTAssertEqual(state.pendingCloudRestoreCandidate, option)
     }
 
     /// 恢复成功后应与「首次添加订阅」一致：自动全量测速 + 择优选延迟最低节点，

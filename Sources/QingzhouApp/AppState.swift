@@ -76,9 +76,15 @@ public final class AppState {
     /// 待确认的恢复候选（启动检查发现云端更新 / 用户从版本列表选了一份）。非 nil 时 UI 弹
     /// 确认 alert，alert 里会展示来源设备 / 时间 / 内容计数 —— 「0 订阅」一眼可见，防误恢复。
     public internal(set) var cloudRestoreOffer: VaultRestoreCandidate?
-    /// 「立即恢复」的版本选择 sheet 状态。非 nil = sheet 在屏：点击瞬间置 .loading **立即
-    /// 呈现**（iCloud 读取要 coordinated read / 可能触发下载，秒级 —— 不能让用户对着按钮
-    /// 干等 sheet 出现），读取完成再变 .loaded / .failed（失败在 sheet 内展示 + 可重试）。
+    /// 版本选择 sheet 是否在屏。⚠️ 专用稳定 Bool，与加载态解耦 —— sheet 的 isPresented
+    /// binding **只依赖它**。之前 binding 读 `cloudVersionLoad != nil`，而 .loading →
+    /// .loaded/.failed 的写入恰落在 sheet 呈现动画进行中（iCloud 元数据有缓存时 fetch
+    /// 很快返回）→ mid-transition 重渲染打断呈现簿记，sheet 弹出后立即自己沉下去
+    /// （真机复验 #18 二次打回）。加载完成 / 失败**绝不能**碰这个开关。
+    public internal(set) var isCloudVersionSheetPresented = false
+    /// 「立即恢复」的版本选择 sheet 内容态：点击瞬间置 .loading（sheet 同时呈现，iCloud
+    /// 读取要 coordinated read / 可能触发下载，秒级 —— 不能让用户对着按钮干等），读取
+    /// 完成再变 .loaded / .failed（失败在 sheet 内展示 + 可重试）。只驱动内容，不驱动呈现。
     public internal(set) var cloudVersionLoad: CloudVersionLoadState?
     /// 已加载出的版本列表（.loaded 时非 nil）。选择 / 关闭逻辑与测试读这个，别自己解包枚举。
     public var cloudVersionOptions: [VaultRestoreCandidate]? {
@@ -520,17 +526,20 @@ public final class AppState {
     /// sheet **立即**呈现（.loading），iCloud 读取异步填充 —— 之前在呈现前同步 await
     /// 读取，真机上按钮点了却要等一两秒 sheet 才出现（复验 #18 反馈）。
     public func requestManualCloudRestore() async {
-        cloudVersionLoad = .loading            // 先呈现 sheet，别让用户干等
+        isCloudVersionSheetPresented = true    // 先呈现 sheet，别让用户干等
+        cloudVersionLoad = .loading
         await loadCloudVersionOptions()
     }
 
     /// 读取云端版本列表填充 sheet；sheet 内「重试」也走这里。
     /// 结果只在 sheet 还在屏时落地 —— 用户中途关掉 sheet，迟到的结果不能把 sheet 复活。
+    /// ⚠️ 这里只写 `cloudVersionLoad`（内容态），绝不碰 `isCloudVersionSheetPresented`
+    /// （呈现开关）—— 加载完成落在呈现动画中，动开关会把呈现中的 sheet 顶掉。
     public func loadCloudVersionOptions() async {
-        guard cloudVersionLoad != nil else { return }   // sheet 已被关掉
+        guard isCloudVersionSheetPresented else { return }   // sheet 已被关掉
         cloudVersionLoad = .loading
         let result = await fetchCloudVersionOptions()
-        guard cloudVersionLoad != nil else { return }   // await 期间被关掉 → 丢弃迟到结果
+        guard isCloudVersionSheetPresented else { return }   // await 期间被关掉 → 丢弃迟到结果
         cloudVersionLoad = result
     }
 
@@ -577,6 +586,7 @@ public final class AppState {
     /// 走一遍流程（真机踩过：确认弹窗第一次自动消失，第二次才正常）。
     public func chooseCloudRestoreCandidate(_ candidate: VaultRestoreCandidate) {
         pendingCloudRestoreCandidate = candidate
+        isCloudVersionSheetPresented = false
         cloudVersionLoad = nil
     }
 
@@ -591,6 +601,7 @@ public final class AppState {
     /// 关闭版本选择列表（含加载中 / 失败态）。在途的读取结果会被 loadCloudVersionOptions
     /// 的 guard 丢弃，不会把 sheet 复活。
     public func dismissCloudVersionOptions() {
+        isCloudVersionSheetPresented = false
         cloudVersionLoad = nil
     }
 

@@ -73,7 +73,9 @@ public struct HomeView: View {
                 }
                 Spacer()
                 Toggle("", isOn: state.vpnRunningBinding)
-                    .toggleStyle(.switch)
+                    // 自绘样式：原生 Switch 的"关"位轨道是系统灰、tint 改不了，
+                    // 切换中要让滑轨跟着变橙只能自绘。三态颜色与左侧状态胶囊同源。
+                    .toggleStyle(TunnelToggleStyle(isSwitching: state.isSwitchingTunnel))
                     .labelsHidden()
                     // 热切换窗口内禁点：重启中途再启停会和 stop→start 时序打架
                     .disabled(state.isSwitchingTunnel)
@@ -102,6 +104,36 @@ public struct HomeView: View {
         // VPN 关了。其余卡片沿用 macOS 失焦变暗的默认行为。
         .environment(\.controlActiveState, .active)
         #endif
+    }
+
+    /// VPN 主开关的自绘滑轨样式：胶囊轨道 + 白色圆钮，观感对齐系统 Switch。
+    /// 轨道三态：切换中橙、开位绿、关位灰 —— 和状态胶囊一个颜色语言。
+    /// 圆钮位置只跟 isOn 走（切换中在关位），用 offset 驱动以便随外层 spring 动画滑动。
+    private struct TunnelToggleStyle: ToggleStyle {
+        var isSwitching: Bool
+
+        private static let trackWidth: CGFloat = 46
+        private static let trackHeight: CGFloat = 28
+
+        func makeBody(configuration: Configuration) -> some View {
+            let track: Color = isSwitching ? Color.orange.opacity(0.6)
+                : (configuration.isOn ? .green : Color.secondary.opacity(0.35))
+            Button {
+                configuration.isOn.toggle()
+            } label: {
+                ZStack(alignment: .leading) {
+                    Capsule().fill(track)
+                        .frame(width: Self.trackWidth, height: Self.trackHeight)
+                    Circle()
+                        .fill(.white)
+                        .frame(width: Self.trackHeight - 4, height: Self.trackHeight - 4)
+                        .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
+                        .padding(2)
+                        .offset(x: configuration.isOn ? Self.trackWidth - Self.trackHeight : 0)
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // 状态胶囊三态：切换中（橙）> 已连接（绿）> 未连接（灰）

@@ -316,10 +316,20 @@ public final class AppState {
             tunnelError = nil
             logger.info("Tunnel started for node \(node.name)", category: "tunnel")
             scheduleIPRefresh()   // 隧道生效后刷新公网 IP → 落到「节点出口」那栏
+            // 冲突防呆：系统代理（Clash 等）开着会在轻舟之前劫走流量 → 部分 App 联不上。
+            // 只读检测、不改系统设置，检出就提示用户去关掉系统代理。
+            if let warn = SystemProxyChecker.conflictWarning() {
+                logger.warn(warn, category: "tunnel")
+                showToast(warn)
+            }
         } catch {
             isVPNRunning = false
             tunnelError = (error as? LocalizedError)?.errorDescription ?? "\(error)"
             logger.error("Tunnel start failed: \(tunnelError ?? "?")", category: "tunnel")
+            // 连接失败干净收尾：configure() 里已开 On-Demand，若不关掉它会拿着坏配置反复重连；
+            // 再 stop() 释放可能半开的隧道，让系统回收 TUN / 路由，避免"半死状态卡住全网"。
+            try? await tunnelManager.setOnDemandEnabled(false)
+            tunnelManager.stop()
         }
     }
 

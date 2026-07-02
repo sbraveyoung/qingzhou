@@ -75,12 +75,6 @@ public struct HomeView: View {
                 Toggle("", isOn: state.vpnRunningBinding)
                     .toggleStyle(.switch)
                     .labelsHidden()
-                    #if os(macOS)
-                    // Keep the switch rendered in its active appearance even when the
-                    // window is inactive; otherwise AppKit dims it so it looks "off",
-                    // misleading users into thinking the VPN is disconnected.
-                    .environment(\.controlActiveState, .active)
-                    #endif
             }
 
             Divider().padding(.vertical, 6)
@@ -98,6 +92,11 @@ public struct HomeView: View {
                 .frame(maxWidth: 280)
             }
         }
+        #if os(macOS)
+        // 只让这张 VPN 开关卡在窗口失焦时仍保持高亮 —— 否则整窗控件随系统变暗，会让人误以为
+        // VPN 关了。其余卡片沿用 macOS 失焦变暗的默认行为。
+        .environment(\.controlActiveState, .active)
+        #endif
     }
 
     private var currentNodeCard: some View {

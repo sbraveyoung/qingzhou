@@ -50,6 +50,10 @@ public struct ConnectionsView: View {
                         }
                     }
             }
+            // macOS 上 sheet 不给尺寸会缩成一个小空框（看起来"啥都没有"）——显式给最小尺寸。
+            #if os(macOS)
+            .frame(minWidth: 480, minHeight: 560)
+            #endif
         }
         .searchable(text: $keyword, prompt: "搜索 host / route / app")
     }

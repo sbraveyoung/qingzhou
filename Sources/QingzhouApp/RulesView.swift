@@ -230,8 +230,14 @@ public struct RulesView: View {
     private func ruleRow(_ rule: Rule, isCustom: Bool) -> some View {
         HStack {
             targetChip(rule.target)
-            Text(rule.lineForm)
-                .font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(rule.lineForm)
+                    .font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
+                // 命中计数只给自定义规则：远程规则整包换源，id 不稳定，计数没有参考价值
+                if isCustom {
+                    hitCountLabel(rule)
+                }
+            }
             Spacer()
             if isCustom {
                 Button {
@@ -240,6 +246,22 @@ public struct RulesView: View {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.borderless)
+            }
+        }
+    }
+
+    /// 「近 30 天命中 N 次」+ 零命中弱提示。计数口径：MatchedRuleResolver 认领该规则的
+    /// **新连接**数（本地统计，不上云）。跟踪不满 7 天观察期时不给「可考虑删除」——
+    /// 否则功能上线首日所有规则都被误标（见 RuleHitStats.minObservedDays）。
+    @ViewBuilder
+    private func hitCountLabel(_ rule: Rule) -> some View {
+        let count = state.ruleHitStats.hitCount(for: rule.id)
+        HStack(spacing: 6) {
+            Text("近 30 天命中 \(count) 次")
+                .font(.caption2).foregroundStyle(.secondary)
+            if state.ruleHitStats.isIdleCandidate(rule.id) {
+                Text("· 长期未命中，可考虑删除")
+                    .font(.caption2).foregroundStyle(.orange.opacity(0.85))
             }
         }
     }

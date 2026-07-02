@@ -86,6 +86,33 @@ final class MatchedRuleResolverTests: XCTestCase {
         XCTAssertEqual(r.resolve(host: "www.github.com", route: .direct), "直连模式（DIRECT）")
     }
 
+    // MARK: - resolveDetailed（命中计数埋点用：认领用户规则时带回规则 id）
+
+    func testResolveDetailedCarriesUserRuleIDWhenClaimed() {
+        let rule = Rule(type: .domainSuffix, value: "google.com", target: .proxy)
+        let r = makeResolver(mode: .rule, rules: [rule])
+        let res = r.resolveDetailed(host: "www.google.com", route: .proxy)
+        XCTAssertEqual(res.ruleText, "DOMAIN-SUFFIX,google.com,PROXY")
+        XCTAssertEqual(res.userRuleID, rule.id)
+    }
+
+    func testResolveDetailedHasNilIDForBuiltinAndUnmatched() {
+        let rule = Rule(type: .domainSuffix, value: "example.com", target: .proxy)
+        let r = makeResolver(mode: .rule, rules: [rule])
+        // 判定不一致 → 内置规则认领，无用户规则 id
+        XCTAssertNil(r.resolveDetailed(host: "www.example.com", route: .direct).userRuleID)
+        // 未命中 → 哨兵值，无 id
+        XCTAssertNil(r.resolveDetailed(host: "foo.github.com", route: .proxy).userRuleID)
+    }
+
+    func testResolveDetailedCachedResultKeepsRuleID() {
+        let rule = Rule(type: .domainSuffix, value: "google.com", target: .proxy)
+        let r = makeResolver(mode: .rule, rules: [rule])
+        _ = r.resolveDetailed(host: "www.google.com", route: .proxy)
+        // 第二次命中缓存，id 不能丢
+        XCTAssertEqual(r.resolveDetailed(host: "www.google.com", route: .proxy).userRuleID, rule.id)
+    }
+
     // MARK: - 缓存
 
     func testCacheIsBoundedAndHit() {

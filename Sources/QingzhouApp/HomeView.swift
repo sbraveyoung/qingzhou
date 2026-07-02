@@ -7,6 +7,10 @@ public struct HomeView: View {
     @State private var isRefreshingIP = false
     @State private var isTestingSpeed = false
     @State private var singleTesting: Set<SpeedTestTarget> = []
+    #if os(iOS)
+    /// iOS 上「连接」不再占 tab（tab 收敛到 5 个），从流量卡的入口 push 进来。
+    @State private var showConnections = false
+    #endif
 
     public init(state: AppState) {
         self.state = state
@@ -46,6 +50,19 @@ public struct HomeView: View {
         } message: { msg in
             Text(msg)
         }
+        #if os(iOS)
+        .navigationDestination(isPresented: $showConnections) {
+            ConnectionsView(state: state)
+        }
+        #endif
+        // 触觉反馈（iOS；macOS 上这些反馈类型是 no-op）：
+        // 开成功 .success、失败 .error、手动关一记轻 impact。只挂关键节点，不滥用。
+        .sensoryFeedback(trigger: state.isVPNRunning) { wasOn, isOn in
+            if isOn && !wasOn { return .success }
+            if wasOn && !isOn { return .impact(weight: .light) }
+            return nil
+        }
+        .sensoryFeedback(.error, trigger: state.tunnelError) { _, new in new != nil }
     }
 
     // MARK: - 卡片
@@ -86,6 +103,17 @@ public struct HomeView: View {
                             .font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("未选择节点").font(.caption).foregroundStyle(.secondary)
+                    }
+                    // 已连接时长 + 本次会话累计流量：安全感信号，独立一行不挤倒计时胶囊。
+                    // 时长起点 = 扩展会话标记的 startedAt（xray 真跑起来那刻）；
+                    // 会话流量 = appex 按会话累计的 TrafficStats（隧道重启即归零，口径一致）。
+                    if state.isVPNRunning, !state.isSwitchingTunnel,
+                       let since = state.connectedSince {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            Text(sessionStatusLine(since: since, now: context.date))
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 Spacer()
@@ -198,6 +226,22 @@ public struct HomeView: View {
     }
     #endif
 
+    /// 「已连接 1:23:45 · ↑ 1.2 MB ↓ 34 MB」。流量读 appex 上报的会话累计值；
+    /// 隧道刚起来还没上报时只显示时长。
+    private func sessionStatusLine(since: Date, now: Date) -> String {
+        var line = "已连接 \(Self.durationText(max(0, now.timeIntervalSince(since))))"
+        if let latest = state.trafficHistory.latest {
+            line += " · ↑ \(ByteFormatter.format(latest.uploadBytes)) ↓ \(ByteFormatter.format(latest.downloadBytes))"
+        }
+        return line
+    }
+
+    /// 秒数 → "1:23:45"（小时不补零，分秒补零）。
+    static func durationText(_ interval: TimeInterval) -> String {
+        let s = Int(interval)
+        return String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
+    }
+
     // 状态胶囊三态：切换中（橙）> 已连接（绿）> 未连接（灰）
     private var statusText: String {
         state.isSwitchingTunnel ? "切换中…" : (state.isVPNRunning ? "VPN 已连接" : "VPN 未连接")
@@ -230,7 +274,9 @@ public struct HomeView: View {
                     }
                 }
             } else {
-                emptyCard(icon: "questionmark.circle", text: "未选择节点", cta: "去节点页选择")
+                emptyCard(icon: "questionmark.circle", text: "未选择节点", cta: "去节点页选择") {
+                    state.activeSection = .nodes
+                }
             }
         }
     }
@@ -238,7 +284,9 @@ public struct HomeView: View {
     private var subscriptionCard: some View {
         Card(title: "订阅", systemImage: "tray.full") {
             if state.subscriptions.isEmpty {
-                emptyCard(icon: "tray", text: "暂无订阅", cta: "去订阅页添加")
+                emptyCard(icon: "tray", text: "暂无订阅", cta: "去订阅页添加") {
+                    state.activeSection = .subscriptions
+                }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(state.subscriptions.prefix(2)) { sub in
@@ -272,9 +320,15 @@ public struct HomeView: View {
 
     private var networkCard: some View {
         Card(title: "公网 IP", systemImage: "globe") {
-            ipRow(title: "节点出口", info: state.proxyIPInfo, tint: .blue)
-            Divider().padding(.vertical, 4)
-            ipRow(title: "直连（不走节点）", info: state.directIPInfo, tint: .green)
+            // 按连接状态切换：未连接时不显示「节点出口」——那栏留着只会摆上一次会话的
+            // 缓存或直连 IP，误导用户以为还在走节点。连上了才有「节点出口」的语义。
+            if state.isVPNRunning {
+                ipRow(title: "节点出口", info: state.proxyIPInfo, tint: .blue)
+                Divider().padding(.vertical, 4)
+                ipRow(title: "直连（不走节点）", info: state.directIPInfo, tint: .green)
+            } else {
+                ipRow(title: "直连 IP（VPN 未连接）", info: state.directIPInfo, tint: .green)
+            }
             HStack {
                 Spacer()
                 Button {
@@ -326,6 +380,19 @@ public struct HomeView: View {
                 statRow("总上行", value: ByteFormatter.format(latest?.uploadBytes ?? 0))
                 statRow("总下行", value: ByteFormatter.format(latest?.downloadBytes ?? 0))
                 statRow("当前速率", value: "↑ \(ByteFormatter.format(latest?.uploadSpeedBps ?? 0))/s · ↓ \(ByteFormatter.format(latest?.downloadSpeedBps ?? 0))/s")
+                #if os(iOS)
+                // 连接页在 iOS 上不占 tab，从这里 push（macOS 侧栏有独立「连接」项，不重复放）
+                HStack {
+                    Spacer()
+                    Button {
+                        showConnections = true
+                    } label: {
+                        Label("查看连接明细", systemImage: "list.bullet.rectangle")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                #endif
             }
         }
     }
@@ -462,13 +529,20 @@ public struct HomeView: View {
         }
     }
 
-    private func emptyCard(icon: String, text: String, cta: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    /// 空态卡：说明文字 + 可点的 CTA 按钮（跳到对应页面）。
+    /// 早期 CTA 是灰色纯文字，新用户第一屏看到「去节点页选择」却无处可点 —— 死路。
+    private func emptyCard(icon: String, text: String, cta: String, action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: icon).foregroundStyle(.secondary)
                 Text(text).foregroundStyle(.secondary)
             }
-            Text(cta).font(.caption2).foregroundStyle(.secondary)
+            Button(action: action) {
+                Label(cta, systemImage: "arrow.right.circle.fill")
+                    .font(.caption)
+            }
+            // borderless：macOS 上带 bezel 的按钮在卡片里显得笨重，tint 色文字即可
+            .buttonStyle(.borderless)
         }
     }
 

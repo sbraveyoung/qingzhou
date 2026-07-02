@@ -124,6 +124,13 @@
 - 域名分析（聚合 + 每日摘要 + 规则建议）已在真实数据上工作
 
 **仍待办（真机 / target 层面）**：
+- **规则模式启动提速**：把 22MB 全球 `geoip.dat` 换成只含 `cn` + `private` 类目的精简版
+  （社区有现成 geoip-only-cn-private.dat，约 1-2MB；本项目路由/DNS 只用到这两个类目），
+  xray 构建 geo 匹配器的耗时可砍一个数量级 —— 规则模式切换慢的主因（2026-07-02）
+- **热切换改回原地重配**：现在热切换走 stop → 等扩展进程完全退出 → start 全新进程
+  （修 xray 同进程 stop→run 卡死时的刻意取舍，见 `AppState.performReapply` 注释），
+  每次切换都冷启动、重建 geo 匹配器。待真机拿到 xray 卡死的具体报错后，
+  评估恢复 `reconfigureInPlace`（扩展侧 handleAppMessage 代码保留着）实现无感切换（2026-07-02）
 - 流量波形（a1）真机验证一次
 - 新建 Widget app-extension target + macOS 自动连 UI 接线（Shortcuts/App-Intents 引擎已写好）
 - S2 真机测试通过（见 [S2-TESTING.md](S2-TESTING.md)）

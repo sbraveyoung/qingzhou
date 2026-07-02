@@ -25,7 +25,7 @@
 **零数据收集**。所有节点 / 订阅 / 规则只在你设备本地 (`Documents/VPN/state.json`),不上传任何服务器。
 不接第三方 SDK(Firebase / Analytics / Sentry 之类全部没有)。
 
-完整隐私政策见 [docs/PRIVACY.md](docs/PRIVACY.md) 或线上版 https://sbraveyoung.github.io/qingzhou/PRIVACY 。
+完整隐私政策见 [docs/PRIVACY.md](docs/PRIVACY.md) 或线上版 https://qingzhou-app.github.io/qingzhou/PRIVACY 。
 
 ## 平台
 
@@ -56,7 +56,7 @@
 ## 编译
 
 ```bash
-git clone https://github.com/sbraveyoung/qingzhou.git
+git clone https://github.com/qingzhou-app/qingzhou.git
 cd qingzhou
 
 # 第一步:构建 LibXray.xcframework(~10 分钟,只用做一次)
@@ -108,6 +108,27 @@ swift test  # 147 测试,通常 < 1 秒
 - 不应用于任何违反当地法律法规的用途。
 - 开发者不运营任何代理节点,不为通过本工具的流量负责。
 
+## 支持这个项目 / Support
+
+轻舟是免费开源项目，靠用户捐赠维持开发。如果它帮到了你：
+
+[![爱发电](https://img.shields.io/badge/爱发电-支持一下-946ce6?logo=github-sponsors&logoColor=white)](https://afdian.com/a/qingzhou-app)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/qingzhou)
+
+- 🇨🇳 大陆用户：[爱发电](https://afdian.com/a/qingzhou-app)（支付宝 / 微信）
+- 🌍 Overseas: [Ko-fi](https://ko-fi.com/qingzhou) (credit card / PayPal)
+- ₮ USDT (TRC-20): `TDczVRXsMNZ6ySqWipxqLfVgdqpnrpCoAE`
+
+捐赠者如愿意留名，会列入下方鸣谢名单（默认匿名）。
+Sponsors who opt in will be credited below (anonymous by default).
+
+### 鸣谢 / Sponsors
+
+感谢每一位支持者。Thank you to all our sponsors!
+
+<!-- sponsors:start -->
+<!-- sponsors:end -->
+
 ## 反馈
 
-[GitHub Issues](https://github.com/sbraveyoung/qingzhou/issues)
+[GitHub Issues](https://github.com/qingzhou-app/qingzhou/issues)

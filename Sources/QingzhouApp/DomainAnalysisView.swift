@@ -5,18 +5,28 @@ import QingzhouCore
 /// 数据源是 `AppState.connections`（隧道上报的真实连接；access log 接入前是示例数据）。
 public struct DomainAnalysisView: View {
     @Bindable var state: AppState
+    /// 「忽略 IP」过滤：来自 ConnectionsView 的临时状态（不持久化），两页联动。
+    @Binding var hideBareIPs: Bool
     @State private var mode = 0
 
-    public init(state: AppState) { self.state = state }
+    public init(state: AppState, hideBareIPs: Binding<Bool>) {
+        self.state = state
+        self._hideBareIPs = hideBareIPs
+    }
 
     public var body: some View {
-        let connections = state.connections
+        // 「忽略 IP」过滤（与连接页联动）：裸 IP 目标在聚合前剔除 ——
+        // FakeDNS 反查不到域名的连接对域名分析没有价值。
+        let connections = hideBareIPs
+            ? state.connections.filter { !HostClassifier.isBareIP($0.targetHost) }
+            : state.connections
+        let hiddenIPCount = state.connections.count - connections.count
         // 排序/展示都用连接次数维度：接上 QueryStats 拿到真实字节前，per-连接流量恒 0，
         // 「按流量排序 + 显示 0B」是假数据。有真实字节后把 sortBy 切回 .traffic 并恢复字节列。
         let stats = DomainAnalyzer.aggregate(connections, sortBy: .connections)
         // 「每日」读按天聚合的持久化历史（跨重启、保留 30 天），不再从内存最近 200 条
-        // 连接现算 —— 那是假历史。
-        let digests = state.domainHistory.digests()
+        // 连接现算 —— 那是假历史。「忽略 IP」必须同样作用到这里，否则和域名 tab 数字对不上。
+        let digests = state.domainHistory.digests(excludingBareIPs: hideBareIPs)
         let suggestions = DomainAnalyzer.suggestions(stats)
 
         List {
@@ -27,6 +37,17 @@ public struct DomainAnalysisView: View {
             }
             .pickerStyle(.segmented)
             .listRowSeparator(.hidden)
+
+            // 过滤生效时的轻提示，避免用户忘了开着过滤、以为数据少了
+            if hiddenIPCount > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "eye.slash").imageScale(.small)
+                    Text("忽略 IP：已隐藏 \(hiddenIPCount) 条纯 IP 连接")
+                }
+                .font(.caption2)
+                .foregroundStyle(.orange)
+                .listRowSeparator(.hidden)
+            }
 
             switch mode {
             case 0:
@@ -39,7 +60,14 @@ public struct DomainAnalysisView: View {
                                            description: Text("开启 VPN 浏览后，这里按天保留最近 30 天的域名访问汇总。"))
                 } else {
                     ForEach(digests) { d in
-                        Section { ForEach(d.domains.prefix(8)) { domainRow($0) } } header: { dailyHeader(d) }
+                        Section {
+                            ForEach(d.domains.prefix(8)) { domainRow($0) }
+                            // 只展示 top 8，剩余的说明白 —— 否则行数和 header 的域名数对不上
+                            if d.domains.count > 8 {
+                                Text("… 还有 \(d.domains.count - 8) 个域名（按连接次数排序，仅显示前 8）")
+                                    .font(.caption2).foregroundStyle(.tertiary)
+                            }
+                        } header: { dailyHeader(d) }
                     }
                 }
             default:
@@ -52,6 +80,11 @@ public struct DomainAnalysisView: View {
             }
         }
         .navigationTitle("域名分析")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                IgnoreIPToggle(isOn: $hideBareIPs)
+            }
+        }
     }
 
     // MARK: - rows
@@ -92,8 +125,9 @@ public struct DomainAnalysisView: View {
         HStack {
             Text(d.day.formatted(date: .abbreviated, time: .omitted))
             Spacer()
-            // 不显示 totalBytes —— 字节数在接上 QueryStats 前恒 0（假数据）
-            Text("代理 \(d.proxyCount) · 直连 \(d.directCount) · 拒绝 \(d.rejectCount)")
+            // 口径：代理/直连/拒绝是**连接次数**（和行里的「N 次」同单位，三者之和 = 当天
+            // 总次数）；域名数单独给。不显示 totalBytes —— 接上 QueryStats 前恒 0（假数据）。
+            Text("\(d.domains.count) 个域名 · 代理 \(d.proxyCount) / 直连 \(d.directCount) / 拒绝 \(d.rejectCount) 次")
                 .font(.caption2).textCase(nil)
         }
     }

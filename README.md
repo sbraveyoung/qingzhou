@@ -117,6 +117,7 @@ swift test  # 147 测试,通常 < 1 秒
 
 - 🇨🇳 大陆用户：[爱发电](https://afdian.com/a/qingzhou-app)（支付宝 / 微信）
 - 🌍 Overseas: [Ko-fi](https://ko-fi.com/qingzhou) (credit card / PayPal)
+- ₮ USDT (TRC-20): `TDczVRXsMNZ6ySqWipxqLfVgdqpnrpCoAE`
 
 捐赠者如愿意留名，会列入下方鸣谢名单（默认匿名）。
 Sponsors who opt in will be credited below (anonymous by default).

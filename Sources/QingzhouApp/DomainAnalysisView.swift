@@ -57,8 +57,8 @@ public struct DomainAnalysisView: View {
             }
             HStack(spacing: 8) {
                 Text("\(s.connectionCount) 次").font(.caption2).foregroundStyle(.secondary)
-                if s.lastMatchedRule.isEmpty {
-                    Text("未命中规则").font(.caption2).foregroundStyle(.orange)
+                if DomainAnalyzer.isUnmatchedRule(s.lastMatchedRule) {
+                    Text("未命中规则（默认策略）").font(.caption2).foregroundStyle(.orange)
                 } else {
                     Text(s.lastMatchedRule).font(.caption2.monospaced()).foregroundStyle(.tertiary).lineLimit(1)
                 }

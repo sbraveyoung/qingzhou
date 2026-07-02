@@ -74,6 +74,9 @@ public final class AppState {
     private var pendingReapply = false
     /// access log 文件已读到的字节位置（增量读，不重复解析）。
     private var accessLogOffset: UInt64 = 0
+    /// matchedRule 回填器（内含 host→规则 缓存）。规则集 / proxyMode 变化时按 key 重建。
+    private var matchedRuleResolver: MatchedRuleResolver?
+    private var matchedRuleResolverKey: Int = 0
     /// appex 写的「假 IP → 域名」映射（FakeDNS），把 access log 的 198.18.x.x 翻回域名。
     private var fakeDNSMap: [String: String] = [:]
     /// content filter 扩展提供的「源端口 → 来源 App bundle id」（仅 macOS）。
@@ -717,6 +720,7 @@ public final class AppState {
         let entries = AccessLogParser.parse(text)
         guard !entries.isEmpty else { return }
         let proxyName = currentNode?.name
+        let resolver = currentMatchedRuleResolver()
         for entry in entries {
             var conn = entry.makeConnection(proxyDisplayName: proxyName)
             // FakeDNS 的假 IP（198.18.x.x）→ 反查回真域名，连接列表/域名分析才有意义
@@ -724,6 +728,12 @@ public final class AppState {
                 conn.targetHost = domain
                 conn.targetAddress = "\(domain):\(entry.targetPort)"
             }
+            // matchedRule 回填：用户规则一致才认领，否则推断 xray 内置规则 / 「未命中」哨兵。
+            // 必须在 FakeDNS 翻译**之后**做，否则拿假 IP 去匹配域名规则全落空。
+            conn.matchedRule = resolver.resolve(
+                host: conn.targetHost,
+                route: DomainAnalyzer.routeCategory(conn.route)
+            )
             // 源端口 → 来源 App（macOS content filter 标注的 bundle id）
             if let port = entry.sourceAddress.split(separator: ":").last.map(String.init),
                let bundleID = sourceAppMap[port] {
@@ -732,6 +742,22 @@ public final class AppState {
             connections.insert(conn, at: 0)
         }
         if connections.count > 200 { connections.removeLast(connections.count - 200) }
+    }
+
+    /// 取当前规则集 + 代理模式对应的 matchedRule 回填器；输入没变时复用同一实例
+    /// （保住内部 host→规则 缓存），变了才重建。key 用 Hasher 而不是逐条对比 ——
+    /// 每 2 秒一次、几千条规则的 hash 是亚毫秒级，逐条 Equatable 对比反而更贵。
+    private func currentMatchedRuleResolver() -> MatchedRuleResolver {
+        var hasher = Hasher()
+        hasher.combine(customRules)
+        hasher.combine(remoteRules)
+        hasher.combine(settings.proxyMode)
+        let key = hasher.finalize()
+        if let cached = matchedRuleResolver, key == matchedRuleResolverKey { return cached }
+        let fresh = MatchedRuleResolver(rules: customRules + remoteRules, mode: settings.proxyMode)
+        matchedRuleResolver = fresh
+        matchedRuleResolverKey = key
+        return fresh
     }
 
     /// appex 经 App Group 上报的真实 `TrafficStats` 喂进波形窗口。UI 观察 `trafficHistory` 自动重绘。

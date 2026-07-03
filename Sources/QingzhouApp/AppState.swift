@@ -363,8 +363,24 @@ public final class AppState {
             return
         }
         let lastSynced = persistence.load(VaultSyncState.self, name: Self.vaultSyncStateName)
+        let localContentHash = try? VaultSnapshotNormalizer.contentHash(
+            of: VaultSnapshotNormalizer.normalized(currentSnapshot()))
+        // 旧版云文档头部没有 contentHash → 回退读全文计算一次（下次本机镜像后头部就有了）。
+        // 只在「不比对就会弹窗」的情形下才多读这一次全文。
+        var cloudContentHash = header?.contentHash
+        if cloudContentHash == nil, let header,
+           header.schemaVersion <= VaultDocument.currentSchemaVersion,
+           header.revision > (lastSynced?.lastSyncedRevision ?? Int.min),
+           let document = try? await cloudVault.loadDocument() {
+            cloudContentHash = try? VaultSnapshotNormalizer.contentHash(
+                of: VaultSnapshotNormalizer.normalized(document.snapshot))
+        }
         switch VaultSyncLogic.startupAction(
-            cloudHeader: header, lastSyncedRevision: lastSynced?.lastSyncedRevision
+            cloudHeader: header,
+            lastSyncedRevision: lastSynced?.lastSyncedRevision,
+            lastDeclinedRevision: lastSynced?.lastDeclinedRevision,
+            cloudContentHash: cloudContentHash,
+            localContentHash: localContentHash
         ) {
         case .mirrorLocal:
             // 防呆：本机是空的且从没同步过（新装机）→ 没什么值得镜像的，也避免在 iCloud
@@ -379,8 +395,20 @@ public final class AppState {
             }
         case .offerRestore(let cloud):
             cloudRestoreOffer = VaultRestoreCandidate(header: cloud)
-            cloudSyncStatus = lastSynced.map { .synced($0.lastSyncedAt) } ?? .unknown
+            cloudSyncStatus = Self.syncedStatus(from: lastSynced) ?? .unknown
             logger.info("iCloud vault newer (rev \(cloud.revision) from \(cloud.deviceName)) — offering restore", category: "cloud")
+        case .adoptCloudRevision(let cloud):
+            // 云端 revision 更高但用户内容与本机一致 → 静默跟进同步记录，不打扰用户
+            let now = Date()
+            try? persistence.save(
+                VaultSyncState(lastSyncedRevision: cloud.revision, lastSyncedAt: now, lastMirroredContentHash: localContentHash),
+                name: Self.vaultSyncStateName
+            )
+            cloudSyncStatus = .synced(now)
+            logger.info("iCloud vault rev \(cloud.revision) has identical content — adopted silently", category: "cloud")
+        case .skipDeclinedRevision(let cloud):
+            cloudSyncStatus = Self.syncedStatus(from: lastSynced) ?? .unknown
+            logger.info("iCloud vault rev \(cloud.revision) was declined before — not prompting again", category: "cloud")
         case .alreadyInSync:
             cloudSyncStatus = .synced(lastSynced?.lastSyncedAt ?? Date())
         case .incompatibleCloud(let version):
@@ -438,7 +466,8 @@ public final class AppState {
                 revision: revision,
                 modifiedAt: Date(),
                 deviceName: Self.deviceName,
-                snapshot: snapshot
+                snapshot: snapshot,
+                contentHash: contentHash
             )
             try await cloudVault.save(document)
             let now = Date()
@@ -573,8 +602,24 @@ public final class AppState {
         }
     }
 
-    /// 用户拒绝恢复：只清掉提示（本次会话不再弹）。本地依旧权威 —— 下次本地编辑会覆盖云端。
+    /// 拒绝过 / 弹过没同步记录时，恢复提示场景下的状态展示：
+    /// 没真正同步过（decline-only 的哨兵记录 lastSyncedRevision == 0）不能显示「最近同步」。
+    private static func syncedStatus(from state: VaultSyncState?) -> CloudSyncStatus? {
+        guard let state, state.lastSyncedRevision > 0 else { return nil }
+        return .synced(state.lastSyncedAt)
+    }
+
+    /// 用户拒绝恢复：清掉提示，并把「拒绝过这个云端 revision」持久化 —— 否则只要云端
+    /// 更新、本机又没编辑过，**每次启动都会重新弹**。本地依旧权威 —— 下次本地编辑会覆盖云端。
     public func declineCloudRestore() {
+        if let offer = cloudRestoreOffer, offer.backupFileName == nil {
+            // lastSyncedRevision == 0 是「从没同步过、但拒绝过恢复」的哨兵值
+            // （nextRevision 用 max(...)+1，0 不影响；状态展示经 syncedStatus 过滤）。
+            var syncState = persistence.load(VaultSyncState.self, name: Self.vaultSyncStateName)
+                ?? VaultSyncState(lastSyncedRevision: 0, lastSyncedAt: .distantPast)
+            syncState.lastDeclinedRevision = offer.header.revision
+            try? persistence.save(syncState, name: Self.vaultSyncStateName)
+        }
         cloudRestoreOffer = nil
     }
 

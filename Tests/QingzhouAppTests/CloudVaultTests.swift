@@ -70,6 +70,74 @@ final class VaultSyncLogicTests: XCTestCase {
         // 用户拒绝恢复后继续本地编辑：要盖过云端的更高 revision
         XCTAssertEqual(VaultSyncLogic.nextRevision(cloudRevision: 2, lastSyncedRevision: 4), 5)
     }
+
+    // MARK: 弹窗降噪（#启动恢复弹窗优化）
+
+    func testCloudNewerButSameContentAdoptsSilently() {
+        // 云端 revision 更高、但规范化内容和本机一致（例如另一台设备恢复历史版本后回推）
+        // → 静默采认云端 revision，不弹恢复确认
+        let h = header(revision: 9)
+        XCTAssertEqual(
+            VaultSyncLogic.startupAction(
+                cloudHeader: h, lastSyncedRevision: 5,
+                cloudContentHash: "same-hash", localContentHash: "same-hash"),
+            .adoptCloudRevision(h)
+        )
+        // 卸载重装、云端内容恰好与本机一致（都为空）→ 同样不弹
+        XCTAssertEqual(
+            VaultSyncLogic.startupAction(
+                cloudHeader: h, lastSyncedRevision: nil,
+                cloudContentHash: "same-hash", localContentHash: "same-hash"),
+            .adoptCloudRevision(h)
+        )
+    }
+
+    func testCloudNewerWithDifferentContentStillOffers() {
+        let h = header(revision: 9)
+        XCTAssertEqual(
+            VaultSyncLogic.startupAction(
+                cloudHeader: h, lastSyncedRevision: 5,
+                cloudContentHash: "cloud-hash", localContentHash: "local-hash"),
+            .offerRestore(h)
+        )
+        // 任一侧哈希缺失（旧文档 / 计算失败）→ 无从比较，保守起见照旧提示
+        XCTAssertEqual(
+            VaultSyncLogic.startupAction(
+                cloudHeader: h, lastSyncedRevision: 5,
+                cloudContentHash: nil, localContentHash: "local-hash"),
+            .offerRestore(h)
+        )
+    }
+
+    func testDeclinedRevisionDoesNotRePrompt() {
+        // 用户对 rev 9 点过「暂不恢复」→ 下次启动同一个 rev 9 不再弹
+        let h = header(revision: 9)
+        XCTAssertEqual(
+            VaultSyncLogic.startupAction(
+                cloudHeader: h, lastSyncedRevision: 5, lastDeclinedRevision: 9,
+                cloudContentHash: "cloud-hash", localContentHash: "local-hash"),
+            .skipDeclinedRevision(h)
+        )
+        // 云端出了新 revision（真有新变化）→ 恢复提示
+        let h10 = header(revision: 10)
+        XCTAssertEqual(
+            VaultSyncLogic.startupAction(
+                cloudHeader: h10, lastSyncedRevision: 5, lastDeclinedRevision: 9,
+                cloudContentHash: "cloud-hash", localContentHash: "local-hash"),
+            .offerRestore(h10)
+        )
+    }
+
+    func testSameContentAdoptTakesPrecedenceOverDecline() {
+        // 内容一致时静默采认（并顺带更新同步记录），优先于「拒绝过」判断
+        let h = header(revision: 9)
+        XCTAssertEqual(
+            VaultSyncLogic.startupAction(
+                cloudHeader: h, lastSyncedRevision: 5, lastDeclinedRevision: 9,
+                cloudContentHash: "same", localContentHash: "same"),
+            .adoptCloudRevision(h)
+        )
+    }
 }
 
 // MARK: - 文档编解码
@@ -410,6 +478,75 @@ final class AppStateCloudVaultTests: XCTestCase {
 
         await state.runCloudVaultStartupCheck()
         XCTAssertNil(state.cloudRestoreOffer, "云端就是自己刚写的，不应提示恢复")
+    }
+
+    /// #启动恢复弹窗优化 之一：用户点过「暂不恢复」→ 杀掉 App 重开（同一本地目录、
+    /// 同一个云端 revision）→ 不再重复弹。这是「每次打开都弹」的直接根因。
+    func testDeclinePersistsAcrossRelaunch() async throws {
+        let store = makeStore()
+        var snapshot = Persistence.Snapshot()
+        snapshot.nodes = [try ProxyURLParser.parse("trojan://pw@cloud.example.com:443#cloud-node")]
+        try await store.save(VaultDocument(revision: 5, modifiedAt: Date(), deviceName: "other", snapshot: snapshot))
+
+        let state = makeState(store: store)
+        await state.runCloudVaultStartupCheck()
+        XCTAssertNotNil(state.cloudRestoreOffer)
+        state.declineCloudRestore()
+
+        // 「重启 App」：同一本地目录新建 AppState
+        let relaunched = makeState(store: store)
+        await relaunched.runCloudVaultStartupCheck()
+        XCTAssertNil(relaunched.cloudRestoreOffer, "拒绝过的 revision 重启后不应再弹")
+
+        // 云端出了真正的新变化（新 revision + 新内容）→ 恢复提示
+        snapshot.customRules = [Rule(type: .domainSuffix, value: "example.com", target: .proxy)]
+        try await store.save(VaultDocument(revision: 6, modifiedAt: Date(), deviceName: "other", snapshot: snapshot))
+        let relaunched2 = makeState(store: store)
+        await relaunched2.runCloudVaultStartupCheck()
+        XCTAssertEqual(relaunched2.cloudRestoreOffer?.header.revision, 6, "云端真有新变化时必须恢复提示")
+    }
+
+    /// #启动恢复弹窗优化 之二：云端 revision 更高但用户内容与本机一致 → 静默采认，
+    /// 不弹窗；同步记录跟进云端 revision，下次启动 alreadyInSync。
+    func testCloudNewerSameContentAdoptedWithoutPrompt() async throws {
+        let store = makeStore()
+        let state = makeState(store: store)
+        try state.addNode(fromURL: "trojan://pw@a.com:443#n1")
+        await state.cloudMirrorTask?.value   // rev 1，header 带 contentHash
+
+        // 另一台设备以更高 revision 回推了**内容相同**的文档（如恢复历史版本后回推）
+        let mirrored = try await store.loadDocument()!
+        try await store.save(VaultDocument(
+            revision: 7, modifiedAt: Date(), deviceName: "other",
+            snapshot: mirrored.snapshot,
+            contentHash: mirrored.contentHash))
+
+        let relaunched = makeState(store: store)
+        await relaunched.runCloudVaultStartupCheck()
+        XCTAssertNil(relaunched.cloudRestoreOffer, "内容一致只是 revision 更高 → 不该打扰用户")
+        relaunched.persistence.waitForPendingWritesForTesting()
+        let syncState = relaunched.persistence.load(VaultSyncState.self, name: "vault-sync-state")
+        XCTAssertEqual(syncState?.lastSyncedRevision, 7, "应静默采认云端 revision")
+    }
+
+    /// #启动恢复弹窗优化 之三：旧版云文档（头部没有 contentHash）→ 回退读全文算哈希，
+    /// 内容一致同样不弹。
+    func testLegacyCloudDocWithoutHashFallsBackToFullDocCompare() async throws {
+        let store = makeStore()
+        let state = makeState(store: store)
+        try state.addNode(fromURL: "trojan://pw@a.com:443#n1")
+        await state.cloudMirrorTask?.value
+
+        // 同内容、更高 revision，但不带 contentHash（模拟旧版本 App 写的文档）
+        let mirrored = try await store.loadDocument()!
+        try await store.save(VaultDocument(
+            revision: 7, modifiedAt: Date(), deviceName: "old-app",
+            snapshot: mirrored.snapshot,
+            contentHash: nil))
+
+        let relaunched = makeState(store: store)
+        await relaunched.runCloudVaultStartupCheck()
+        XCTAssertNil(relaunched.cloudRestoreOffer, "旧文档也应通过全文哈希比对识别出内容一致")
     }
 
     func testDeclineRestoreThenLocalEditOverwritesCloud() async throws {

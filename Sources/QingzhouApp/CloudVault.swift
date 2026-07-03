@@ -28,6 +28,10 @@ public struct VaultDocument: Codable, Sendable {
     /// 「N 订阅 / M 节点」，用户看到「0 订阅」就不会误恢复空数据。optional：兼容旧文档。
     public var subscriptionCount: Int?
     public var nodeCount: Int?
+    /// 规范化快照的内容哈希，冗余在头部 —— 启动检查不解码整个 snapshot 就能判断
+    /// 「云端和本机的用户内容是否真的不同」，一致就静默采认 revision、不弹恢复确认。
+    /// optional：兼容旧文档（旧文档由 AppState 回退读全文计算）。
+    public var contentHash: String?
     public var snapshot: Persistence.Snapshot
 
     public init(
@@ -35,7 +39,8 @@ public struct VaultDocument: Codable, Sendable {
         revision: Int,
         modifiedAt: Date,
         deviceName: String,
-        snapshot: Persistence.Snapshot
+        snapshot: Persistence.Snapshot,
+        contentHash: String? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.revision = revision
@@ -43,6 +48,7 @@ public struct VaultDocument: Codable, Sendable {
         self.deviceName = deviceName
         self.subscriptionCount = snapshot.subscriptions.count
         self.nodeCount = snapshot.nodes.count
+        self.contentHash = contentHash
         self.snapshot = snapshot
     }
 
@@ -79,6 +85,8 @@ public struct VaultHeader: Codable, Sendable, Equatable {
     /// 旧文档没有计数字段 → nil，UI 显示「内容数量未知」。
     public var subscriptionCount: Int?
     public var nodeCount: Int?
+    /// 规范化快照的内容哈希（见 VaultDocument.contentHash）。旧文档 → nil。
+    public var contentHash: String?
 
     public init(
         schemaVersion: Int,
@@ -86,7 +94,8 @@ public struct VaultHeader: Codable, Sendable, Equatable {
         modifiedAt: Date,
         deviceName: String,
         subscriptionCount: Int? = nil,
-        nodeCount: Int? = nil
+        nodeCount: Int? = nil,
+        contentHash: String? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.revision = revision
@@ -94,6 +103,7 @@ public struct VaultHeader: Codable, Sendable, Equatable {
         self.deviceName = deviceName
         self.subscriptionCount = subscriptionCount
         self.nodeCount = nodeCount
+        self.contentHash = contentHash
     }
 
     /// 恢复确认弹窗 / 版本列表展示的内容摘要 —— 让「空数据」一眼可见。
@@ -136,11 +146,21 @@ public struct VaultSyncState: Codable, Sendable {
     /// 上次成功镜像的**规范化**快照内容哈希 —— 内容没变就跳过镜像，
     /// 不产生新 revision、不挤掉滚动备份里有价值的历史。optional：兼容旧文件。
     public var lastMirroredContentHash: String?
+    /// 用户最后一次点「暂不恢复」时的云端 revision —— 同一个 revision 不再重复弹
+    /// （否则只要云端更新、本机又没编辑过，每次启动都弹）。云端出新 revision 才再提示。
+    /// 镜像 / 恢复成功后重建同步状态时自然清空。optional：兼容旧文件。
+    public var lastDeclinedRevision: Int?
 
-    public init(lastSyncedRevision: Int, lastSyncedAt: Date, lastMirroredContentHash: String? = nil) {
+    public init(
+        lastSyncedRevision: Int,
+        lastSyncedAt: Date,
+        lastMirroredContentHash: String? = nil,
+        lastDeclinedRevision: Int? = nil
+    ) {
         self.lastSyncedRevision = lastSyncedRevision
         self.lastSyncedAt = lastSyncedAt
         self.lastMirroredContentHash = lastMirroredContentHash
+        self.lastDeclinedRevision = lastDeclinedRevision
     }
 }
 
@@ -198,28 +218,48 @@ public enum VaultStartupAction: Equatable, Sendable {
     case offerRestore(VaultHeader)
     /// 云端就是本机最后写的那份 → 什么都不用做。
     case alreadyInSync
+    /// 云端 revision 更高，但**规范化内容与本机一致**（如另一台设备恢复历史版本后回推）
+    /// → 静默采认云端 revision（更新本机同步记录），不打扰用户。
+    case adoptCloudRevision(VaultHeader)
+    /// 云端这个 revision 用户已明确「暂不恢复」过 → 不再重复弹，等云端出新 revision。
+    case skipDeclinedRevision(VaultHeader)
     /// 云文档来自更新版本的 App → 不恢复也不覆盖，提示用户升级。
     case incompatibleCloud(schemaVersion: Int)
 }
 
 public enum VaultSyncLogic {
     /// 启动时对比云端头部与本机同步记录，决定动作。
+    ///
+    /// 弹窗降噪（当且仅当用户持久化内容真有差异才提示）：
+    /// - `cloudContentHash` == `localContentHash` → 静默采认，绝不弹；
+    /// - 该 revision 拒绝过（`lastDeclinedRevision`）→ 不再弹；
+    /// - 任一哈希缺失（旧文档 / 计算失败）→ 无从比较，保守照旧提示。
     public static func startupAction(
         cloudHeader: VaultHeader?,
         lastSyncedRevision: Int?,
+        lastDeclinedRevision: Int? = nil,
+        cloudContentHash: String? = nil,
+        localContentHash: String? = nil,
         currentSchemaVersion: Int = VaultDocument.currentSchemaVersion
     ) -> VaultStartupAction {
         guard let cloud = cloudHeader else { return .mirrorLocal }
         if cloud.schemaVersion > currentSchemaVersion {
             return .incompatibleCloud(schemaVersion: cloud.schemaVersion)
         }
-        guard let last = lastSyncedRevision else {
-            // 本机从没同步过、云端却有数据 —— 卸载重装 / 新设备的核心场景
-            return .offerRestore(cloud)
+        // lastSyncedRevision == nil：本机从没同步过、云端却有数据 —— 卸载重装 / 新设备，
+        // 和「云端更新」一样走内容比对 → 提示恢复的流程。
+        if let last = lastSyncedRevision {
+            if cloud.revision < last { return .mirrorLocal }
+            if cloud.revision == last { return .alreadyInSync }
         }
-        if cloud.revision > last { return .offerRestore(cloud) }
-        if cloud.revision < last { return .mirrorLocal }
-        return .alreadyInSync
+        let cloudHash = cloudContentHash ?? cloud.contentHash
+        if let cloudHash, let localContentHash, cloudHash == localContentHash {
+            return .adoptCloudRevision(cloud)
+        }
+        if let lastDeclinedRevision, cloud.revision == lastDeclinedRevision {
+            return .skipDeclinedRevision(cloud)
+        }
+        return .offerRestore(cloud)
     }
 
     /// 下一次镜像要写的 revision：盖过云端和本机记录中较大者。

@@ -27,7 +27,7 @@ struct QingzhouVPNControl: ControlWidget {
                 isOn: isOn,
                 action: SetQingzhouVPNIntent()
             ) { on in
-                Label(on ? "已连接" : "未连接",
+                Label(on ? String(localized: "已连接") : String(localized: "未连接"),
                       systemImage: on ? "checkmark.shield.fill" : "shield.slash")
             }
         }

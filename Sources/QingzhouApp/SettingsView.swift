@@ -185,9 +185,7 @@ public struct SettingsView: View {
                 .font(.caption2).foregroundStyle(.secondary)
 
             Toggle("择优用经代理延迟精选", isOn: state.setting(\.autoSelectUsesProxiedLatency))
-            Text("VPN 运行中择优时，把**直连结果为绿色**的节点逐个真实走一遍代理再选（更准，"
-                 + "多花些时间）：能避开「直连快但出口绕路或已失效」的假好节点。"
-                 + "VPN 未开启时经代理测速无法进行，自动退回直连结果。")
+            Text("VPN 运行中择优时，把直连结果为绿色的节点逐个真实走一遍代理再选（更准，多花些时间）：能避开「直连快但出口绕路或已失效」的假好节点。VPN 未开启时经代理测速无法进行，自动退回直连结果。")
                 .font(.caption2).foregroundStyle(.secondary)
 
             NavigationLink {
@@ -437,8 +435,7 @@ public struct SettingsView: View {
             } label: {
                 Label("添加 App…", systemImage: "plus")
             }
-            Text("任一所选 App 启动 → 自动连接；全部退出 → 自动断开（只断开由自动连接拉起的会话，"
-                 + "手动开启的 VPN 不受影响）。iPhone/iPad 上可用「快捷指令 → 自动化 → App」实现同样效果。")
+            Text("任一所选 App 启动 → 自动连接；全部退出 → 自动断开（只断开由自动连接拉起的会话，手动开启的 VPN 不受影响）。iPhone/iPad 上可用「快捷指令 → 自动化 → App」实现同样效果。")
                 .font(.caption2).foregroundStyle(.secondary)
         }
     }
@@ -446,7 +443,7 @@ public struct SettingsView: View {
     /// NSOpenPanel 选 .app → 读 bundle id 存入设置。选不出 bundle id 的（损坏包）静默跳过。
     private func addAutoConnectApps() {
         let panel = NSOpenPanel()
-        panel.title = "选择触发自动连接的 App"
+        panel.title = L("选择触发自动连接的 App")
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.allowedContentTypes = [.applicationBundle]
         panel.allowsMultipleSelection = true

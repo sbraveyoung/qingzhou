@@ -44,8 +44,8 @@ public struct AutomationGuideView: View {
         } header: {
             Text("现成的动作（零配置）")
         } footer: {
-            Text("这四个动作已自动出现在「快捷指令」App 里（搜索“轻舟”即可），无需任何设置，"
-                 + "可直接运行或编进你自己的快捷指令。刚安装完可能需要几分钟被系统索引。")
+            // 单字面量（不用 + 拼接）—— 拼接产生 String 走 verbatim，进不了字符串目录
+            Text("这四个动作已自动出现在「快捷指令」App 里（搜索“轻舟”即可），无需任何设置，可直接运行或编进你自己的快捷指令。刚安装完可能需要几分钟被系统索引。")
         }
     }
 
@@ -71,8 +71,7 @@ public struct AutomationGuideView: View {
             step(3, "选择目标 App（比如 ChatGPT / Slack），勾「已打开」")
             step(4, "把「运行前询问」改成「立即运行」 —— 这步决定它是全自动还是每次弹确认")
             step(5, "下一步 → 搜索“轻舟” → 选「开启轻舟」→ 完成")
-            Text("再建一条对称的：同一个 App 勾「已关闭」→ 动作选「关闭轻舟」。"
-                 + "从此打开它就有网、关掉它就断开。")
+            Text("再建一条对称的：同一个 App 勾「已关闭」→ 动作选「关闭轻舟」。从此打开它就有网、关掉它就断开。")
                 .font(.caption).foregroundStyle(.secondary)
             Button {
                 openShortcutsApp()
@@ -82,8 +81,7 @@ public struct AutomationGuideView: View {
         } header: {
             Text("配方 · 打开某 App 自动连接")
         } footer: {
-            Text("Apple 不允许任何 App 替你预装自动化（安全设计），所以这五步必须亲手点一次 —— "
-                 + "只需一次，之后永久生效。")
+            Text("Apple 不允许任何 App 替你预装自动化（安全设计），所以这五步必须亲手点一次 —— 只需一次，之后永久生效。")
         }
     }
 
@@ -115,13 +113,11 @@ public struct AutomationGuideView: View {
     #if os(macOS)
     private var macAutoConnectSection: some View {
         Section {
-            Text("macOS 的快捷指令没有「App 打开/关闭」触发器 —— 轻舟原生实现了这个能力，"
-                 + "不需要快捷指令：")
+            Text("macOS 的快捷指令没有「App 打开/关闭」触发器 —— 轻舟原生实现了这个能力，不需要快捷指令：")
                 .font(.callout)
             step(1, "设置 → macOS 集成 → 打开「打开指定 App 时自动连接」")
             step(2, "「添加 App…」选择触发 App（可多选）")
-            Text("任一触发 App 启动 → 自动连接；全部退出 → 自动断开（只断自动拉起的会话，"
-                 + "你手动开的 VPN 不受影响）。")
+            Text("任一触发 App 启动 → 自动连接；全部退出 → 自动断开（只断自动拉起的会话，你手动开的 VPN 不受影响）。")
                 .font(.caption).foregroundStyle(.secondary)
         } header: {
             Text("打开某 App 自动连接（原生支持）")
@@ -141,7 +137,8 @@ public struct AutomationGuideView: View {
 
     // MARK: - 小部件
 
-    private func recipe(_ icon: String, _ title: String, _ detail: String) -> some View {
+    // title/detail 用 LocalizedStringKey：字面量才会走字符串目录（String 参数是 verbatim）
+    private func recipe(_ icon: String, _ title: LocalizedStringKey, _ detail: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
                 .frame(width: 22)
@@ -153,7 +150,7 @@ public struct AutomationGuideView: View {
         }
     }
 
-    private func step(_ n: Int, _ text: String) -> some View {
+    private func step(_ n: Int, _ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text("\(n)")
                 .font(.caption.bold().monospacedDigit())

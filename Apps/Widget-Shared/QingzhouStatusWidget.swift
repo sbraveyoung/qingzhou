@@ -76,11 +76,13 @@ struct QingzhouStatusView: View {
 
     private var snapshot: VPNWidgetSnapshot { entry.snapshot }
 
+    // String(localized:)：computed String 走 verbatim，不包一层进不了字符串目录。
+    // widget 是独立 bundle，查自己的 Localizable.xcstrings（跟随系统语言）。
     private var statusText: String {
         switch snapshot.phase {
-        case .connected:     "已连接"
-        case .transitioning: "切换中…"
-        case .disconnected:  "未连接"
+        case .connected:     String(localized: "已连接")
+        case .transitioning: String(localized: "切换中…")
+        case .disconnected:  String(localized: "未连接")
         }
     }
 
@@ -147,7 +149,7 @@ struct QingzhouStatusView: View {
             }
             Spacer(minLength: 2)
             Button(intent: ToggleVPNIntent()) {
-                Text(snapshot.phase == .disconnected ? "连接" : "断开")
+                Text(snapshot.phase == .disconnected ? String(localized: "连接") : String(localized: "断开"))
                     .font(.footnote.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }
@@ -186,7 +188,7 @@ struct QingzhouStatusView: View {
                 VStack(spacing: 4) {
                     Image(systemName: "power")
                         .font(.title3.weight(.semibold))
-                    Text(snapshot.phase == .disconnected ? "连接" : "断开")
+                    Text(snapshot.phase == .disconnected ? String(localized: "连接") : String(localized: "断开"))
                         .font(.footnote.weight(.semibold))
                 }
                 .frame(width: 72, height: 60)

@@ -265,6 +265,16 @@
         }
       }
     },
+    "Apple 不允许任何 App 替你预装自动化（安全设计），所以这五步必须亲手点一次 —— 只需一次，之后永久生效。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple doesn't allow any app to pre-install automations for you (a security design), so these five steps must be tapped once by hand — once only, then it works forever."
+          }
+        }
+      }
+    },
     "FINAL（兜底）": {
       "extractionState": "manual",
       "localizations": {
@@ -397,6 +407,16 @@
         }
       }
     },
+    "VPN 已连接，但通过当前节点无法访问外网。节点可能已失效或凭据错误（这类问题服务端不会回报错误，只能实测发现）。建议：长按节点「测经代理延迟」验证可用性，或直接换一个节点。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The VPN is connected, but the internet can't be reached through the current node. The node may be dead or its credentials wrong (servers don't report such errors — only a real test reveals them). Suggestion: long-press the node and run “Test Proxied Latency” to verify, or switch to another node."
+          }
+        }
+      }
+    },
     "VPN 未连接": {
       "extractionState": "manual",
       "localizations": {
@@ -404,6 +424,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "VPN Not Connected"
+          }
+        }
+      }
+    },
+    "VPN 运行中择优时，把直连结果为绿色的节点逐个真实走一遍代理再选（更准，多花些时间）：能避开「直连快但出口绕路或已失效」的假好节点。VPN 未开启时经代理测速无法进行，自动退回直连结果。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When auto-selecting while the VPN is running, every node whose direct latency is green gets re-tested through the proxy before choosing (more accurate, takes longer): this avoids “fast direct but detoured or dead” impostors. When the VPN is off, proxied testing isn't possible and direct results are used."
           }
         }
       }
@@ -562,6 +592,16 @@
         }
       }
     },
+    "macOS 的快捷指令没有「App 打开/关闭」触发器 —— 轻舟原生实现了这个能力，不需要快捷指令：": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcuts on macOS has no “app opened/closed” trigger — Qingzhou implements this natively, no Shortcuts needed:"
+          }
+        }
+      }
+    },
     "macOS 集成": {
       "extractionState": "manual",
       "localizations": {
@@ -635,6 +675,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "· No hits for a long time; consider removing"
+          }
+        }
+      }
+    },
+    "“关闭轻舟”": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Turn off Qingzhou”"
+          }
+        }
+      }
+    },
+    "“切换轻舟”": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Toggle Qingzhou”"
+          }
+        }
+      }
+    },
+    "“开启轻舟”": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Turn on Qingzhou”"
           }
         }
       }
@@ -716,6 +786,16 @@
         }
       }
     },
+    "「如果」里放「开启轻舟」→ 完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inside the “If”, add “Turn On Qingzhou” → Done"
+          }
+        }
+      }
+    },
     "「忽略 IP」已隐藏 %lld 条纯 IP 连接。": {
       "extractionState": "manual",
       "localizations": {
@@ -734,6 +814,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Source App labeling is on, but there are no attributable connections yet.\nMake sure the VPN is on and browse for a bit; connections made before labeling was enabled cannot be attributed retroactively."
+          }
+        }
+      }
+    },
+    "「添加 App…」选择触发 App（可多选）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Add App…” and pick trigger apps (multiple allowed)"
           }
         }
       }
@@ -826,6 +916,26 @@
         }
       }
     },
+    "上面配方的第 5 步改为：搜索“轻舟” → 「轻舟是否已连接」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In step 5 of the recipe above, instead: search “Qingzhou” → “Is Qingzhou Connected”"
+          }
+        }
+      }
+    },
+    "下一步 → 搜索“轻舟” → 选「开启轻舟」→ 完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next → search “Qingzhou” → pick “Turn On Qingzhou” → Done"
+          }
+        }
+      }
+    },
     "下行": {
       "extractionState": "manual",
       "localizations": {
@@ -892,6 +1002,16 @@
         }
       }
     },
+    "主屏小组件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Home Screen Widget"
+          }
+        }
+      }
+    },
     "主机": {
       "extractionState": "manual",
       "localizations": {
@@ -932,6 +1052,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Current Cloud Version"
+          }
+        }
+      }
+    },
+    "什么是经代理延迟？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What is proxied latency?"
           }
         }
       }
@@ -987,6 +1117,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Proxy Mode"
+          }
+        }
+      }
+    },
+    "任一所选 App 启动 → 自动连接；全部退出 → 自动断开（只断开由自动连接拉起的会话，手动开启的 VPN 不受影响）。iPhone/iPad 上可用「快捷指令 → 自动化 → App」实现同样效果。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Any selected app launching → auto-connect; all quitting → auto-disconnect (only sessions started by auto-connect; a VPN you started manually is never touched). On iPhone/iPad, use Shortcuts → Automation → App for the same effect."
+          }
+        }
+      }
+    },
+    "任一触发 App 启动 → 自动连接；全部退出 → 自动断开（只断自动拉起的会话，你手动开的 VPN 不受影响）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Any trigger app launching → auto-connect; all of them quitting → auto-disconnect (only sessions started by auto-connect; a VPN you started manually is never touched)."
           }
         }
       }
@@ -1064,6 +1214,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Test latency, then set the lowest-latency node as current"
+          }
+        }
+      }
+    },
+    "免解锁、免找图标，说一句就连。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No unlocking, no icon hunting — one sentence and you're connected."
           }
         }
       }
@@ -1266,6 +1426,16 @@
         }
       }
     },
+    "再建一条对称的：同一个 App 勾「已关闭」→ 动作选「关闭轻舟」。从此打开它就有网、关掉它就断开。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a mirror automation: same app, check “Is Closed” → action “Turn Off Qingzhou”. From then on, opening it gets you online and closing it disconnects."
+          }
+        }
+      }
+    },
     "凭据 / 加密": {
       "extractionState": "manual",
       "localizations": {
@@ -1442,6 +1612,16 @@
         }
       }
     },
+    "加「如果」动作：条件 = 结果 为 否": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add an “If” action: condition = result is No"
+          }
+        }
+      }
+    },
     "加入代理": {
       "extractionState": "manual",
       "localizations": {
@@ -1596,6 +1776,16 @@
         }
       }
     },
+    "去快捷指令创建": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create in Shortcuts"
+          }
+        }
+      }
+    },
     "去节点页选择": {
       "extractionState": "manual",
       "localizations": {
@@ -1680,6 +1870,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Taiwan"
+          }
+        }
+      }
+    },
+    "右上 + → 「App」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap + at the top right → “App”"
           }
         }
       }
@@ -1827,6 +2027,16 @@
         }
       }
     },
+    "四个动作同样零配置可用，可编入任何 macOS 工作流": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The same four zero-setup actions, usable in any macOS workflow"
+          }
+        }
+      }
+    },
     "国内域名走了代理，直连更快也省代理流量": {
       "extractionState": "manual",
       "localizations": {
@@ -1845,6 +2055,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Türkiye"
+          }
+        }
+      }
+    },
+    "在跑就断开，没跑就连接 —— 一个动作两用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnects if running, connects if not — one action, two uses"
           }
         }
       }
@@ -2131,6 +2351,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Password"
+          }
+        }
+      }
+    },
+    "对 Siri 说": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Say to Siri"
           }
         }
       }
@@ -2520,6 +2750,16 @@
         }
       }
     },
+    "已随触发 App 自动连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-connected with the trigger app"
+          }
+        }
+      }
+    },
     "巴西": {
       "extractionState": "manual",
       "localizations": {
@@ -2527,6 +2767,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Brazil"
+          }
+        }
+      }
+    },
+    "常驻状态与开关，随点随用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always-on status and toggle, one click away"
           }
         }
       }
@@ -2773,6 +3023,26 @@
         }
       }
     },
+    "快捷指令 / Siri": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcuts / Siri"
+          }
+        }
+      }
+    },
+    "快捷指令 / Siri / 打开某 App 自动连 / 小组件 —— 全部配方一页看懂。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcuts / Siri / auto-connect on app launch / widgets — every recipe on one page."
+          }
+        }
+      }
+    },
     "忽略 IP": {
       "extractionState": "manual",
       "localizations": {
@@ -2850,6 +3120,26 @@
         }
       }
     },
+    "打开「快捷指令」App → 底部「自动化」标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the Shortcuts app → “Automation” tab at the bottom"
+          }
+        }
+      }
+    },
+    "打开「快捷指令」看看": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Shortcuts to Take a Look"
+          }
+        }
+      }
+    },
     "打开主窗口": {
       "extractionState": "manual",
       "localizations": {
@@ -2868,6 +3158,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Turning a switch on excludes every node in that region (skipped by auto-select, never chosen automatically). For example, exclude Hong Kong to avoid the restrictions services like Anthropic or OpenAI place on Hong Kong IPs."
+          }
+        }
+      }
+    },
+    "打开指定 App 时自动连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-Connect When Selected Apps Open"
+          }
+        }
+      }
+    },
+    "打开某 App 自动连接（原生支持）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-Connect When an App Opens (Native)"
           }
         }
       }
@@ -2960,6 +3270,16 @@
         }
       }
     },
+    "把「运行前询问」改成「立即运行」 —— 这步决定它是全自动还是每次弹确认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change “Ask Before Running” to “Run Immediately” — this decides fully-automatic vs. confirm-every-time"
+          }
+        }
+      }
+    },
     "把全部日志导出成文本文件": {
       "extractionState": "manual",
       "localizations": {
@@ -2989,6 +3309,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reject"
+          }
+        }
+      }
+    },
+    "择优用经代理延迟精选": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refine Auto-Select With Proxied Latency"
           }
         }
       }
@@ -3081,6 +3411,26 @@
         }
       }
     },
+    "控制中心 → 左上 + → 添加控件 → 搜“轻舟 VPN” —— 从任何界面下拉一键开关": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control Center → + at the top left → Add Control → search “Qingzhou VPN” — toggle from anywhere with one swipe"
+          }
+        }
+      }
+    },
+    "控制中心（iOS 18+）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control Center (iOS 18+)"
+          }
+        }
+      }
+    },
     "搜索 host / route / app": {
       "extractionState": "manual",
       "localizations": {
@@ -3136,6 +3486,16 @@
         }
       }
     },
+    "效果：已连接时什么都不做，未连接才连 —— 避免重复启动打断在跑的会话。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effect: does nothing when already connected, connects only when not — avoids restarting and interrupting a live session."
+          }
+        }
+      }
+    },
     "数据目录": {
       "extractionState": "manual",
       "localizations": {
@@ -3154,6 +3514,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Disconnects the current VPN connection."
+          }
+        }
+      }
+    },
+    "断开当前连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnect the current connection"
           }
         }
       }
@@ -3301,6 +3671,16 @@
         }
       }
     },
+    "普通测速（无图标的数字）是设备直接对节点服务器握手一次，只说明「节点离你近不近、活着没」——密码错误的节点它也照样显示很快。\n\n经代理延迟（带 ⋱ 图标）是 VPN 运行时，让 xray 携带完整协议真实通过该节点访问一次 google.com，测出的是你实际用它上网的端到端耗时——协议握手、节点转发、出口线路质量全部包含。数值天然比直连大，但它才是真实体感：直连快、经代理慢 = 节点出口绕路；直连快、经代理失败 = 节点不可用（如凭据错误）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The plain latency test (the number without an icon) is a single handshake from your device to the node's server — it only tells you how close the node is and that the machine is alive. A node with a wrong password still shows a great number.\n\nProxied latency (with the ⋱ icon) runs while the VPN is on: xray carries the full protocol through that node to reach google.com once, measuring the true end-to-end time you'd actually experience — protocol handshake, node forwarding, and exit-route quality included. It's naturally higher than direct, but it's the real feel: fast direct + slow proxied = detoured exit; fast direct + failed proxied = unusable node (e.g. bad credentials)."
+          }
+        }
+      }
+    },
     "暂不恢复": {
       "extractionState": "manual",
       "localizations": {
@@ -3418,6 +3798,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "More"
+          }
+        }
+      }
+    },
+    "更快的入口": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faster Entry Points"
           }
         }
       }
@@ -4038,6 +4428,16 @@
         }
       }
     },
+    "添加 App…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add App…"
+          }
+        }
+      }
+    },
     "添加并刷新": {
       "extractionState": "manual",
       "localizations": {
@@ -4126,6 +4526,16 @@
         }
       }
     },
+    "点菜单栏时钟 → 编辑小组件 → 添加轻舟": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click the menu-bar clock → Edit Widgets → add Qingzhou"
+          }
+        }
+      }
+    },
     "状态": {
       "extractionState": "manual",
       "localizations": {
@@ -4133,6 +4543,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Status"
+          }
+        }
+      }
+    },
+    "现成的动作（零配置）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready-Made Actions (Zero Setup)"
           }
         }
       }
@@ -4203,6 +4623,16 @@
         }
       }
     },
+    "知道了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Got It"
+          }
+        }
+      }
+    },
     "确定清空全部日志？": {
       "extractionState": "manual",
       "localizations": {
@@ -4210,6 +4640,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Clear all logs?"
+          }
+        }
+      }
+    },
+    "移除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
           }
         }
       }
@@ -4368,6 +4808,16 @@
         }
       }
     },
+    "经代理延迟是什么？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What Is Proxied Latency?"
+          }
+        }
+      }
+    },
     "经代理延迟：真实通过该节点访问网站的全链路耗时": {
       "extractionState": "manual",
       "localizations": {
@@ -4456,6 +4906,26 @@
         }
       }
     },
+    "经代理精选完成：实测 %lld 个候选，避开 %lld 个不可用节点": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proxied refine done: tested %lld candidates, avoided %lld unusable nodes"
+          }
+        }
+      }
+    },
+    "经代理精选：%lld 个候选实测均失败，本次按直连结果选择": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proxied refine: all %lld candidates failed the real test — using the direct-latency pick this time"
+          }
+        }
+      }
+    },
     "给所有未排除的节点测一次延迟": {
       "extractionState": "manual",
       "localizations": {
@@ -4507,6 +4977,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Automation"
+          }
+        }
+      }
+    },
+    "自动化玩法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automation Guide"
+          }
+        }
+      }
+    },
+    "自动化玩法指南": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automation Guide"
           }
         }
       }
@@ -4654,6 +5144,16 @@
         }
       }
     },
+    "菜单栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu Bar"
+          }
+        }
+      }
+    },
     "菲律宾": {
       "extractionState": "manual",
       "localizations": {
@@ -4742,6 +5242,16 @@
         }
       }
     },
+    "触发 App 已全部退出，已自动断开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All trigger apps quit — auto-disconnected"
+          }
+        }
+      }
+    },
     "订阅": {
       "extractionState": "manual",
       "localizations": {
@@ -4782,6 +5292,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Settings"
+          }
+        }
+      }
+    },
+    "设置 → macOS 集成 → 打开「打开指定 App 时自动连接」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings → macOS Integration → enable “Auto-Connect When Selected Apps Open”"
           }
         }
       }
@@ -4940,6 +5460,16 @@
         }
       }
     },
+    "轻舟已连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qingzhou is connected"
+          }
+        }
+      }
+    },
     "轻舟日志": {
       "extractionState": "manual",
       "localizations": {
@@ -4947,6 +5477,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Qingzhou Logs"
+          }
+        }
+      }
+    },
+    "轻舟是否已连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Is Qingzhou Connected"
+          }
+        }
+      }
+    },
+    "轻舟未连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qingzhou is not connected"
           }
         }
       }
@@ -4980,6 +5530,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld hits in the last 30 days"
+          }
+        }
+      }
+    },
+    "返回 VPN 当前是否已连接（布尔值），可在自动化里做条件判断。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Returns whether the VPN is currently connected (boolean), for conditions in automations."
+          }
+        }
+      }
+    },
+    "返回是/否，给自动化做条件判断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Returns yes/no for conditions in automations"
           }
         }
       }
@@ -5039,6 +5609,16 @@
         }
       }
     },
+    "这四个动作已自动出现在「快捷指令」App 里（搜索“轻舟”即可），无需任何设置，可直接运行或编进你自己的快捷指令。刚安装完可能需要几分钟被系统索引。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These four actions appear in the Shortcuts app automatically (just search “Qingzhou”) — no setup needed. Run them directly or use them in your own shortcuts. Right after installing, the system may take a few minutes to index them."
+          }
+        }
+      }
+    },
     "进程名（仅 macOS）": {
       "extractionState": "manual",
       "localizations": {
@@ -5046,6 +5626,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Process Name (macOS Only)"
+          }
+        }
+      }
+    },
+    "进阶 · 条件版（推荐）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Advanced · Conditional Version (Recommended)"
           }
         }
       }
@@ -5068,6 +5658,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Connections"
+          }
+        }
+      }
+    },
+    "连接到上次使用的节点": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect to the last used node"
           }
         }
       }
@@ -5127,6 +5727,16 @@
         }
       }
     },
+    "选择目标 App（比如 ChatGPT / Slack），勾「已打开」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick the target app (e.g. ChatGPT / Slack) and check “Is Opened”"
+          }
+        }
+      }
+    },
     "选择节点": {
       "extractionState": "manual",
       "localizations": {
@@ -5149,6 +5759,26 @@
         }
       }
     },
+    "选择触发自动连接的 App": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Apps That Trigger Auto-Connect"
+          }
+        }
+      }
+    },
+    "通知中心小组件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notification Center Widget"
+          }
+        }
+      }
+    },
     "通过订阅页添加订阅，或右上 + 按钮粘贴单条链接 / 扫码添加。": {
       "extractionState": "manual",
       "localizations": {
@@ -5156,6 +5786,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add subscriptions from the Subscriptions page, or tap + at the top right to paste a single link / scan a QR code."
+          }
+        }
+      }
+    },
+    "配方 · 打开某 App 自动连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recipe · Auto-Connect When an App Opens"
           }
         }
       }
@@ -5237,6 +5877,16 @@
         }
       }
     },
+    "锁屏小组件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lock Screen Widget"
+          }
+        }
+      }
+    },
     "键 (如 sni)": {
       "extractionState": "manual",
       "localizations": {
@@ -5244,6 +5894,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Key (e.g. sni)"
+          }
+        }
+      }
+    },
+    "长按主屏空白处 → 编辑 → 添加小组件 → 搜“轻舟” —— 小/中/大三种尺寸，按钮直接启停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long-press an empty spot on the Home Screen → Edit → Add Widget → search “Qingzhou” — small/medium/large sizes with a start/stop button"
+          }
+        }
+      }
+    },
+    "长按锁屏 → 自定义 → 添加轻舟圆形/矩形 —— 不解锁看状态": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long-press the Lock Screen → Customize → add Qingzhou circular/rectangular — check status without unlocking"
           }
         }
       }

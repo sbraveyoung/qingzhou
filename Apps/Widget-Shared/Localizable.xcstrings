@@ -1,127 +1,177 @@
 {
-  "sourceLanguage" : "zh-Hans",
-  "strings" : {
-    "轻舟 VPN" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Qingzhou VPN"
+  "sourceLanguage": "zh-Hans",
+  "strings": {
+    "• Siri：对 Siri 说「开启轻舟」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• Siri: say “Turn on Qingzhou”"
           }
         }
       }
     },
-    "查看连接状态，一键启停。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "See connection status and toggle the VPN with one tap."
+    "• 快捷指令：搜「轻舟」，开 / 关 / 切换、状态判断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• Shortcuts: search “Qingzhou” — start / stop / toggle / status check"
           }
         }
       }
     },
-    "已连接" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connected"
+    "• 控制中心：添加「轻舟 VPN」控件，一键启停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• Control Center: add the “Qingzhou VPN” control for one-tap toggling"
           }
         }
       }
     },
-    "切换中…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Switching…"
+    "• 自动化：打开某 App 时自动连接，关闭时断开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• Automation: auto-connect when an app opens, disconnect when it closes"
           }
         }
       }
     },
-    "未连接" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not Connected"
+    "一键启停 VPN。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle the VPN with one tap."
           }
         }
       }
     },
-    "连接" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect"
+    "切换中…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switching…"
           }
         }
       }
     },
-    "断开" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Disconnect"
+    "已连接": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected"
           }
         }
       }
     },
-    "一键启停 VPN。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toggle the VPN with one tap."
+    "开 = 连接上次使用的节点，关 = 断开。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On connects to the last used node; off disconnects."
           }
         }
       }
     },
-    "设定轻舟 VPN" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Set Qingzhou VPN"
+    "开启": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On"
           }
         }
       }
     },
-    "开 = 连接上次使用的节点，关 = 断开。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On connects to the last used node; off disconnects."
+    "断开": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnect"
           }
         }
       }
     },
-    "开启" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "On"
+    "更多玩法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More to Try"
+          }
+        }
+      }
+    },
+    "未连接": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Connected"
+          }
+        }
+      }
+    },
+    "查看连接状态，一键启停。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See connection status and toggle the VPN with one tap."
+          }
+        }
+      }
+    },
+    "设定轻舟 VPN": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Qingzhou VPN"
+          }
+        }
+      }
+    },
+    "轻舟 VPN": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qingzhou VPN"
+          }
+        }
+      }
+    },
+    "连接": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

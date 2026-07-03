@@ -362,7 +362,7 @@ public final class AppState {
                         self.tunnelStartedByAutoConnect = true
                         await self.startTunnel()
                         if self.isVPNRunning {
-                            self.showToast("已随触发 App 自动连接")
+                            self.showToast(L("已随触发 App 自动连接"))
                         } else {
                             self.tunnelStartedByAutoConnect = false   // 没起来，别把后续手动会话误标
                         }
@@ -372,7 +372,7 @@ public final class AppState {
                     Task { @MainActor [weak self] in
                         guard let self, self.tunnelStartedByAutoConnect, self.isVPNRunning else { return }
                         await self.stopTunnel()
-                        self.showToast("触发 App 已全部退出，已自动断开")
+                        self.showToast(L("触发 App 已全部退出，已自动断开"))
                     }
                 }
             )
@@ -1053,9 +1053,7 @@ public final class AppState {
                 if attempt == 0 { try? await Task.sleep(for: .seconds(3)) }
                 guard self.isVPNRunning, !self.isSwitchingTunnel else { return }
             }
-            self.tunnelError = "VPN 已连接，但通过当前节点无法访问外网。节点可能已失效或凭据错误"
-                + "（这类问题服务端不会回报错误，只能实测发现）。建议：长按节点「测经代理延迟」"
-                + "验证可用性，或直接换一个节点。"
+            self.tunnelError = L("VPN 已连接，但通过当前节点无法访问外网。节点可能已失效或凭据错误（这类问题服务端不会回报错误，只能实测发现）。建议：长按节点「测经代理延迟」验证可用性，或直接换一个节点。")
             self.logger.error("Connectivity probe failed after tunnel connected — node likely dead/bad credentials", category: "tunnel")
         }
     }
@@ -1279,12 +1277,12 @@ public final class AppState {
         if let bestNode {
             logger.info("Proxied refine picked \(bestNode.name) (\(bestMs)ms) from \(candidates.count) green candidates (\(failedCount) failed)", category: "app")
             if failedCount > 0 {
-                showToast("经代理精选完成：实测 \(candidates.count) 个候选，避开 \(failedCount) 个不可用节点")
+                showToast(L("经代理精选完成：实测 \(candidates.count) 个候选，避开 \(failedCount) 个不可用节点"))
             }
             return bestNode
         }
         logger.warn("Proxied refine: all \(candidates.count) candidates failed — falling back to direct best", category: "app")
-        showToast("经代理精选：\(candidates.count) 个候选实测均失败，本次按直连结果选择")
+        showToast(L("经代理精选：\(candidates.count) 个候选实测均失败，本次按直连结果选择"))
         return fallback
     }
 

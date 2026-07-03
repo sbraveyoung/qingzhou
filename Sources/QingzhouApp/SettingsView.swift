@@ -28,6 +28,11 @@ public struct SettingsView: View {
             diagnosticsSection
             aboutSection
         }
+        // 语言切换时强制整页重建：iOS 的 Form 是 UICollectionView，cell 复用会让个别
+        // 收起态 Picker 的**值文案**（L() 预解析的 String）残留旧语种（真机踩过：
+        // 切 English 后「定时关闭」的值仍显示「关闭」）。静态 Text 靠 \.locale 环境值
+        // 自动刷新不受影响，但 String 值内容不变时 cell 未必重渲染 —— id 直接换树。
+        .id(state.settings.language)
         .navigationTitle("设置")
         .formStyle(.grouped)
         // 「立即恢复」的版本选择 sheet。两条呈现纪律（复验 #18 两轮打回换来的）：
@@ -289,12 +294,11 @@ public struct SettingsView: View {
                 Text("浅色").tag(AppearanceTheme.light)
                 Text("深色").tag(AppearanceTheme.dark)
             }
+            // 只放出已支持的语种（繁中/日语没有翻译、跟随系统暂不放出 —— 都下架，
+            // 见 Settings.language 注释；enum case 保留兼容旧持久化数据）
             Picker("语言", selection: state.setting(\.language)) {
-                Text("跟随系统").tag(AppLanguage.system)
                 Text("简体中文").tag(AppLanguage.zhHans)
-                Text("繁體中文").tag(AppLanguage.zhHant)
                 Text("English").tag(AppLanguage.en)
-                Text("日本語").tag(AppLanguage.ja)
             }
         }
     }

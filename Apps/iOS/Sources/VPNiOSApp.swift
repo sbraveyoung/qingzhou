@@ -5,6 +5,7 @@
 // share link → xray 配置的转换都在 Extension（Apps/Tunnel-Shared/PacketTunnelProvider.swift）
 // 里跑 —— Extension 进程独立加载 LibXray，跟主 App 启动无关。
 
+import os
 import SwiftUI
 import QingzhouApp
 import QingzhouLogging
@@ -32,6 +33,14 @@ struct VPNiOSApp: App {
                     } else if CommandLine.arguments.contains("--qz-stop-vpn") {
                         await state.stopTunnel()
                     }
+                    // 语言切换钩子 + L10n 自检：远程验证英文化（截图 + syslog 双通道）
+                    if CommandLine.arguments.contains("--qz-lang-en") {
+                        state.setting(\.language).wrappedValue = .en
+                    } else if CommandLine.arguments.contains("--qz-lang-zh") {
+                        state.setting(\.language).wrappedValue = .zhHans
+                    }
+                    let diag = os.Logger(subsystem: "com.sbraveyoung.qingzhou.diag", category: "l10n")
+                    diag.info("lang=\(state.settings.language.rawValue, privacy: .public) bundle=\(L10n.bundle.bundlePath, privacy: .public) 关闭→\(L("关闭"), privacy: .public) 定时=\(AutoStopPresets.label(for: 0), privacy: .public)")
                     #endif
                     // 网络初始化延后到首屏稳定之后再跑：首次启动（尤其墙内/无网）这些请求会挂起，
                     // 别让它们和冷启动争抢。延迟 + 失败都不影响 UI。

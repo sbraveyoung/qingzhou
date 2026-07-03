@@ -246,6 +246,11 @@ public final class AppState {
             category: "app"
         )
         logger.setMinimumLevel(LogLevel(rawValue: settings.logLevel) ?? .info)
+        // 语言选项只放出 zhHans / en：存量老值（跟随系统 / 繁中 / 日语）一次性迁移到简中，
+        // 否则 Picker 无匹配 tag、显示为空（旧值来自下架前的版本或手改 JSON）
+        if settings.language != .zhHans && settings.language != .en {
+            settings.language = .zhHans
+        }
         // 动态字符串（toast / 错误文案）的语言跟随 App 语言设置（静态 UI 靠 \.locale 环境值）
         L10n.setLanguage(settings.language)
     }

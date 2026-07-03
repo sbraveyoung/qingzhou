@@ -73,7 +73,7 @@ public struct Settings: Codable, Sendable {
         launchAtLogin: Bool = false,
         logLevel: String = "INFO",
         theme: AppearanceTheme = .system,
-        language: AppLanguage = .system,
+        language: AppLanguage = .zhHans,
         autoConnectOnAppLaunch: Bool = false,
         autoConnectApps: Set<String> = [],
         iCloudSyncEnabled: Bool = true,
@@ -129,7 +129,9 @@ public struct Settings: Codable, Sendable {
         self.launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         self.logLevel = try c.decodeIfPresent(String.self, forKey: .logLevel) ?? "INFO"
         self.theme = try c.decodeIfPresent(AppearanceTheme.self, forKey: .theme) ?? .system
-        self.language = try c.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
+        // 语言选项 2026-07-03 起只放出 zhHans / en（system/zhHant/ja 暂下架：繁日无翻译，
+        // system 在放出前默认简中更可控）。旧值仍能解码（enum case 保留），AppState 启动时迁移。
+        self.language = try c.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .zhHans
         self.autoConnectOnAppLaunch = try c.decodeIfPresent(Bool.self, forKey: .autoConnectOnAppLaunch) ?? false
         self.autoConnectApps = try c.decodeIfPresent(Set<String>.self, forKey: .autoConnectApps) ?? []
         self.iCloudSyncEnabled = try c.decodeIfPresent(Bool.self, forKey: .iCloudSyncEnabled) ?? true

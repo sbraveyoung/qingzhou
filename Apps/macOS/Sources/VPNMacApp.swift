@@ -6,6 +6,7 @@
 //
 // 同样，真要让代理工作需要 Network Extension Target 和 entitlements，详见 docs/BUILD.md。
 
+import os
 import SwiftUI
 import QingzhouApp
 import QingzhouLogging
@@ -58,6 +59,17 @@ struct VPNMacApp: App {
                 .task {
                     state.startSchedulers()
                     state.applyMacSystemPreferences()
+                    #if DEBUG
+                    // 远程验收钩子（仅 DEBUG，同 iOS 壳）：`open Qingzhou.app --args --qz-lang-en`
+                    // 切语言；l10n 自检日志用 `log show --predicate 'subsystem == "com.sbraveyoung.qingzhou.diag"'` 读
+                    if CommandLine.arguments.contains("--qz-lang-en") {
+                        state.setting(\.language).wrappedValue = .en
+                    } else if CommandLine.arguments.contains("--qz-lang-zh") {
+                        state.setting(\.language).wrappedValue = .zhHans
+                    }
+                    let diag = os.Logger(subsystem: "com.sbraveyoung.qingzhou.diag", category: "l10n")
+                    diag.info("lang=\(state.settings.language.rawValue, privacy: .public) bundle=\(L10n.bundle.bundlePath, privacy: .public) 关闭→\(L("关闭"), privacy: .public) 定时=\(AutoStopPresets.label(for: 0), privacy: .public)")
+                    #endif
                     if state.remoteRules.isEmpty {
                         await state.refreshRemoteRules()
                     }

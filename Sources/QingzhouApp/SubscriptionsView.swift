@@ -3,6 +3,8 @@ import QingzhouCore
 
 public struct SubscriptionsView: View {
     @Bindable var state: AppState
+    /// 跟随 App 语言设置的 locale（根视图注入），日期格式化用
+    @Environment(\.locale) private var locale
     @State private var newName: String = ""
     @State private var newURL: String = ""
     @State private var addError: String?
@@ -124,7 +126,7 @@ public struct SubscriptionsView: View {
             HStack(spacing: 12) {
                 Text("节点 \(sub.nodeCount)")
                 if let upd = sub.lastUpdatedAt {
-                    Text("· \(upd.formatted(.relative(presentation: .named)))")
+                    Text("· \(upd.formatted(.relative(presentation: .named).locale(locale)))")
                 }
                 Spacer()
             }
@@ -135,7 +137,7 @@ public struct SubscriptionsView: View {
                     .font(.caption2.monospaced()).foregroundStyle(.secondary)
             }
             if let exp = sub.expiresAt {
-                Text("到期：\(exp.formatted(date: .abbreviated, time: .omitted))")
+                Text("到期：\(exp.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale)))")
                     .font(.caption2).foregroundStyle(.secondary)
             }
             if let err = state.subscriptionErrors[sub.id] {

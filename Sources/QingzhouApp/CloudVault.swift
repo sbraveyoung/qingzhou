@@ -256,7 +256,7 @@ public enum CloudSyncStatus: Equatable, Sendable {
         case .idle: return L("尚无可同步的数据")
         case .syncing: return L("同步中…")
         case .synced(let date):
-            return L("最近同步 \(date.formatted(date: .abbreviated, time: .shortened))")
+            return L("最近同步 \(date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(L10n.locale)))")
         case .incompatibleCloud:
             return L("iCloud 数据来自更新版本的轻舟，请升级 App")
         case .error(let message): return L("同步失败：\(message)")

@@ -4,6 +4,8 @@ import QingzhouSpeedTest
 
 public struct HomeView: View {
     @Bindable var state: AppState
+    /// 跟随 App 语言设置的 locale（根视图注入），日期/相对时间格式化用
+    @Environment(\.locale) private var locale
     @State private var isRefreshingIP = false
     @State private var isTestingSpeed = false
     @State private var singleTesting: Set<SpeedTestTarget> = []
@@ -268,7 +270,7 @@ public struct HomeView: View {
                     HStack {
                         latencyChip(node.lastLatencyMs)
                         if let t = node.lastTestedAt {
-                            Text("测于 \(t.formatted(.relative(presentation: .named)))")
+                            Text("测于 \(t.formatted(.relative(presentation: .named).locale(locale)))")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                     }
@@ -295,7 +297,7 @@ public struct HomeView: View {
                             HStack {
                                 Text("节点 \(sub.nodeCount)").font(.caption2).foregroundStyle(.secondary)
                                 if let upd = sub.lastUpdatedAt {
-                                    Text("· 更新于 \(upd.formatted(.relative(presentation: .named)))")
+                                    Text("· 更新于 \(upd.formatted(.relative(presentation: .named).locale(locale)))")
                                         .font(.caption2).foregroundStyle(.secondary)
                                 }
                             }
@@ -305,7 +307,7 @@ public struct HomeView: View {
                                     .font(.caption2.monospaced())
                             }
                             if let exp = sub.expiresAt {
-                                Text("到期：\(exp.formatted(date: .abbreviated, time: .omitted))")
+                                Text("到期：\(exp.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(locale)))")
                                     .font(.caption2).foregroundStyle(.secondary)
                             }
                         }
@@ -358,7 +360,7 @@ public struct HomeView: View {
                 if !loc.isEmpty {
                     Text(loc).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 }
-                Text("更新于 \(info.fetchedAt.formatted(.relative(presentation: .named)))")
+                Text("更新于 \(info.fetchedAt.formatted(.relative(presentation: .named).locale(locale)))")
                     .font(.caption2).foregroundStyle(.tertiary)
             } else {
                 Text(isRefreshingIP ? "查询中…" : "尚未获取")

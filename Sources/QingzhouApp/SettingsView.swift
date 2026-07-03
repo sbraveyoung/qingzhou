@@ -3,6 +3,8 @@ import QingzhouCore
 
 public struct SettingsView: View {
     @Bindable var state: AppState
+    /// 跟随 App 语言设置的 locale（根视图注入），日期/相对时间格式化用
+    @Environment(\.locale) private var locale
     @State private var filterEnabled = false
 
     public init(state: AppState) { self.state = state }
@@ -302,7 +304,7 @@ public struct SettingsView: View {
         Section {
             LabeledContent("当前版本") {
                 if state.geoData.hasFullGeoIP, let info = state.geoData.info {
-                    Text("完整版 · \(info.downloadedAt.formatted(date: .abbreviated, time: .shortened)) · 来源：\(L10n.lookup(info.sourceName))")
+                    Text("完整版 · \(info.downloadedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale))) · 来源：\(L10n.lookup(info.sourceName))")
                         .font(.caption)
                 } else {
                     Text("精简版（内置，GEOIP 仅 cn / private）")
@@ -465,7 +467,7 @@ public struct SettingsView: View {
                                         (option.header.nodeCount ?? 1) == 0 ? AnyShapeStyle(.orange)
                                                                             : AnyShapeStyle(.primary))
                                 Text("\(option.header.deviceName) · "
-                                     + option.header.modifiedAt.formatted(date: .abbreviated, time: .shortened))
+                                     + option.header.modifiedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale)))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                             .contentShape(Rectangle())

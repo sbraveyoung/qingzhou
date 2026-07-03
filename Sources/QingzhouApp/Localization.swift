@@ -45,19 +45,22 @@ public enum LocaleResolver {
 public enum L10n {
     private static let lock = NSLock()
     private nonisolated(unsafe) static var overrideBundle: Bundle?
+    private nonisolated(unsafe) static var overrideLocale: Locale?
 
-    /// App 语言设置变化时更新动态字符串使用的 bundle。
+    /// App 语言设置变化时更新动态字符串使用的 bundle / locale。
     public static func setLanguage(_ language: AppLanguage) {
-        let resolved: Bundle?
+        let resolvedBundle: Bundle?
         if let lproj = LocaleResolver.lprojName(for: language),
            let path = Bundle.main.path(forResource: lproj, ofType: "lproj"),
            let bundle = Bundle(path: path) {
-            resolved = bundle
+            resolvedBundle = bundle
         } else {
-            resolved = nil
+            resolvedBundle = nil
         }
+        let resolvedLocale: Locale? = language == .system ? nil : LocaleResolver.locale(for: language)
         lock.lock()
-        overrideBundle = resolved
+        overrideBundle = resolvedBundle
+        overrideLocale = resolvedLocale
         lock.unlock()
     }
 
@@ -66,6 +69,15 @@ public enum L10n {
         lock.lock()
         defer { lock.unlock() }
         return overrideBundle ?? .main
+    }
+
+    /// 当前 App 语言对应的 locale（「跟随系统」时即系统 locale）。
+    /// **模型层**动态字符串里的日期/数字格式化用它 —— `.formatted()` 默认吃进程首选语言，
+    /// 感知不到 App 内语言设置；视图层请优先用 `@Environment(\.locale)`。
+    public static var locale: Locale {
+        lock.lock()
+        defer { lock.unlock() }
+        return overrideLocale ?? Locale.autoupdatingCurrent
     }
 
     /// 按 key 查表（值本身是动态数据的场景：地区名、模式名等）。没有翻译时原样返回 key。

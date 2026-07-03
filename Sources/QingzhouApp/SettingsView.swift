@@ -193,6 +193,15 @@ public struct SettingsView: View {
             Text("VPN 运行中择优时，把直连结果为绿色的节点逐个真实走一遍代理再选（更准，多花些时间）：能避开「直连快但出口绕路或已失效」的假好节点。VPN 未开启时经代理测速无法进行，自动退回直连结果。")
                 .font(.caption2).foregroundStyle(.secondary)
 
+            Picker("测速探测目标", selection: proxiedTargetBinding) {
+                Text("自动（Cloudflare，最稳）").tag("")
+                ForEach(ConnectivityProbe.presets) { t in
+                    Text(t.name).tag(t.url)
+                }
+            }
+            Text("经代理测速和「已连接但无法上网」检测用哪个站点探测。有些节点出口对 Google 会 reset —— 默认用 Cloudflare 更稳。改这里也影响连通性提示的判定。")
+                .font(.caption2).foregroundStyle(.secondary)
+
             NavigationLink {
                 AutomationGuideView()
             } label: {
@@ -276,6 +285,17 @@ public struct SettingsView: View {
         Binding(
             get: { AutoStopPresets.nearest(to: state.settings.autoStopSeconds) },
             set: { state.setAutoStopSeconds($0) }
+        )
+    }
+
+    /// 「测速探测目标」Binding：存量值不在预设列表里（旧自定义 / 同步来的）→ get 归一成「自动」，
+    /// 保证 Picker 永远有合法选中项（否则 iOS Picker 会显示空白）。
+    private var proxiedTargetBinding: Binding<String> {
+        let raw = state.setting(\.proxiedTestTarget)
+        let known = Set(ConnectivityProbe.presets.map(\.url))
+        return Binding(
+            get: { known.contains(raw.wrappedValue) ? raw.wrappedValue : "" },
+            set: { raw.wrappedValue = $0 }
         )
     }
 

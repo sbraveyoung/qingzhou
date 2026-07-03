@@ -1047,34 +1047,40 @@ public final class AppState {
     /// 直连模式不探测：没有代理链路，墙内访问 google 本来就通不了，会误报。
     private func verifyTunnelConnectivity() {
         guard settings.proxyMode != .direct else { return }
+        let preferred = settings.proxiedTestTarget
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(2))   // 给 xray 出站起身时间，降低刚建链的误报
             guard let self, self.isVPNRunning, !self.isSwitchingTunnel else { return }
+            // 多目标：任一通过即算联网。一个节点出口 reset Google 却能到 Cloudflare 是好节点，
+            // 单点探测（旧实现只打 google/generate_204）会把这种节点误判成「无法访问外网」。
             for attempt in 0..<2 {
-                if await Self.probeTunnelConnectivity() {
+                if await Self.probeTunnelConnectivity(preferred: preferred) {
                     self.logger.info("Connectivity probe OK", category: "tunnel")
                     return
                 }
                 if attempt == 0 { try? await Task.sleep(for: .seconds(3)) }
                 guard self.isVPNRunning, !self.isSwitchingTunnel else { return }
             }
-            self.tunnelError = L("VPN 已连接，但通过当前节点无法访问外网。节点可能已失效或凭据错误（这类问题服务端不会回报错误，只能实测发现）。建议：长按节点「测经代理延迟」验证可用性，或直接换一个节点。")
-            self.logger.error("Connectivity probe failed after tunnel connected — node likely dead/bad credentials", category: "tunnel")
+            self.tunnelError = L("VPN 已连接，但多个探测目标（Cloudflare / Apple / Google）都访问不通，当前节点可能已失效或凭据错误。若你确认能正常上网，可能只是探测站点被临时阻断——可在设置→测速里换个探测目标，或直接换节点。")
+            self.logger.error("Connectivity probe failed on all targets after tunnel connected", category: "tunnel")
         }
     }
 
-    /// 经隧道真实访问一次 generate_204。任何 HTTP 响应都算通（204 是预期，3xx/2xx 也说明链路活着）。
-    private static func probeTunnelConnectivity() async -> Bool {
-        var request = URLRequest(url: URL(string: "https://www.google.com/generate_204")!)
-        request.timeoutInterval = 6
+    /// 经隧道按序尝试多个探测目标，任一返回 HTTP 响应即算联网。
+    /// 每个目标 8 秒超时（比旧的 6 秒宽松，降低慢出口误报）。
+    private static func probeTunnelConnectivity(preferred: String) async -> Bool {
         let config = URLSessionConfiguration.ephemeral
         config.waitsForConnectivity = false
-        do {
-            let (_, response) = try await URLSession(configuration: config).data(for: request)
-            return response is HTTPURLResponse
-        } catch {
-            return false
+        let session = URLSession(configuration: config)
+        for target in ConnectivityProbe.sentinelTargets(preferred: preferred) {
+            guard let url = URL(string: target) else { continue }
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 8
+            if let (_, response) = try? await session.data(for: request), response is HTTPURLResponse {
+                return true
+            }
         }
+        return false
     }
 
     public func stopTunnel() async {
@@ -1340,7 +1346,7 @@ public final class AppState {
         proxiedMeasuringNodeIds.insert(node.id)
         defer { proxiedMeasuringNodeIds.remove(node.id) }
         do {
-            let ms = try await tunnelManager.pingNode(node: node)
+            let ms = try await tunnelManager.pingNode(node: node, targetURL: settings.proxiedTestTarget)
             if let i = nodes.firstIndex(where: { $0.id == node.id }) {
                 nodes[i].lastProxiedLatencyMs = ms
                 nodes[i].lastProxiedTestedAt = Date()

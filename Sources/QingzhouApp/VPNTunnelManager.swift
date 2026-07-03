@@ -221,13 +221,16 @@ public final class VPNTunnelManager {
     /// HTTP 延迟（扩展 handleAppMessage "pingNode"）。返回毫秒数。
     /// VPN 没开（拿不到会话）/ 扩展回错 / 超时都 throws —— 调用方降级为直连 TCP 测速。
     /// 超时给足 timeout+启动余量：临时实例启动 <1s + HTTP 最长 timeout 秒 + 串行排队缓冲。
-    public func pingNode(node: Node, timeoutSeconds: Int = 5) async throws -> Int {
+    public func pingNode(node: Node, targetURL: String? = nil, timeoutSeconds: Int = 5) async throws -> Int {
+        var command: [String: String] = [
+            "command": "pingNode",
+            "nodeJSON": Self.encodeNodeJSON(node),
+            "timeout": String(timeoutSeconds)
+        ]
+        // 探测目标：默认 Cloudflare（见 ConnectivityProbe）—— 比 Google 更少被节点出口 reset
+        command["url"] = (targetURL?.isEmpty == false ? targetURL : nil) ?? ConnectivityProbe.defaultProxiedTarget
         let reply = try await sendCommandForReply(
-            [
-                "command": "pingNode",
-                "nodeJSON": Self.encodeNodeJSON(node),
-                "timeout": String(timeoutSeconds)
-            ],
+            command,
             timeoutSeconds: Double(timeoutSeconds) + 8,
             timeoutLabel: L("经代理测速超时"), failureLabel: L("经代理测速失败")
         )

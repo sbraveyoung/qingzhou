@@ -388,8 +388,15 @@ private struct NodeRow: View {
                         rateTag(rate)
                     }
                 }
-                Text("\(node.protocolType.rawValue.uppercased()) · \(node.host):\(node.port)")
-                    .font(.caption.monospaced()).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text("\(node.protocolType.rawValue.uppercased()) · \(node.host):\(node.port)")
+                        .font(.caption.monospaced()).foregroundStyle(.secondary)
+                    // 被动观测的实测峰值下行带宽（用过才有）—— 零额外流量，反映真实带宽
+                    if let bps = node.observedPeakDownBps {
+                        Text("· ↓ \(ByteFormatter.speed(bps))")
+                            .font(.caption.monospaced()).foregroundStyle(.blue)
+                    }
+                }
             }
             Spacer(minLength: 8)
             // 两个延迟维度：iOS **竖排**（上直连、下经代理）—— iPhone 窄屏 + 长节点名

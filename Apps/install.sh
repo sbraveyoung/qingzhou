@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一键构建 + 安装 Qingzhou-macOS.app 到 /Applications。
+# 一键构建 + 安装 Qingzhou.app 到 /Applications。
 #
 # 用法：
 #   ./install.sh              # ad-hoc 签名（默认；UI 能跑；VPN 开关会报 permission denied）
@@ -18,7 +18,8 @@ fi
 
 # 1) 停掉正在跑的 app
 echo "==> Stopping any running instance"
-killall Qingzhou-macOS 2>/dev/null || true
+killall Qingzhou 2>/dev/null || true
+killall Qingzhou-macOS 2>/dev/null || true   # 兼容旧构建名
 
 # 2) 重新生成 Xcode 工程
 echo "==> Regenerating Xcode project"
@@ -48,8 +49,8 @@ else
     build 2>&1 | tail -3
 fi
 
-APP_SRC="$BUILD_DIR/Build/Products/Release/Qingzhou-macOS.app"
-APP_DST="/Applications/Qingzhou-macOS.app"
+APP_SRC="$BUILD_DIR/Build/Products/Release/Qingzhou.app"
+APP_DST="/Applications/Qingzhou.app"
 
 if [ ! -d "$APP_SRC" ]; then
   echo "ERROR: build artifact not found at $APP_SRC" >&2
@@ -59,7 +60,7 @@ fi
 # 4) 装到 /Applications
 echo "==> Installing to $APP_DST"
 if [ ! -w /Applications ]; then
-  APP_DST="$HOME/Applications/Qingzhou-macOS.app"
+  APP_DST="$HOME/Applications/Qingzhou.app"
   mkdir -p "$HOME/Applications"
 fi
 rm -rf "$APP_DST"
@@ -73,7 +74,7 @@ echo "==> Launching"
 open "$APP_DST"
 
 sleep 1
-PID=$(pgrep -f Qingzhou-macOS | head -1 || true)
+PID=$(pgrep -f "MacOS/Qingzhou" | head -1 || true)
 if [ -n "${PID:-}" ]; then
   echo "==> Done. PID=$PID  →  $APP_DST"
   if [ "$SIGNED_MODE" = "1" ]; then

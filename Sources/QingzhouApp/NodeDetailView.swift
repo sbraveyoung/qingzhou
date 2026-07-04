@@ -174,6 +174,14 @@ public struct NodeDetailView: View {
             if let pt = draft.lastProxiedTestedAt {
                 LabeledContent("最近经代理测速", value: pt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale)))
             }
+            if let bps = draft.observedPeakDownBps {
+                LabeledContent("实测峰值带宽", value: "↓ " + ByteFormatter.speed(bps))
+                if let bt = draft.observedBandwidthAt {
+                    LabeledContent("观测于", value: bt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale)))
+                }
+                Text("你正常上网时观测到的真实峰值下行速率（未额外消耗流量）。反映带宽，与延迟互补。")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
             Button {
                 Task {
                     if let ms = await state.measureProxiedLatency(draft) {

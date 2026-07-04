@@ -1183,6 +1183,16 @@
         }
       }
     },
+    "你正常上网时观测到的真实峰值下行速率（未额外消耗流量）。反映带宽，与延迟互补。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The real peak download speed observed during your normal browsing (no extra data used). Reflects bandwidth, complementing latency."
+          }
+        }
+      }
+    },
     "依次刷新所有订阅": {
       "extractionState": "manual",
       "localizations": {
@@ -2360,6 +2370,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auto-stop update timed out"
+          }
+        }
+      }
+    },
+    "实测峰值带宽": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Observed Peak Bandwidth"
           }
         }
       }
@@ -5231,6 +5251,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Philippines"
+          }
+        }
+      }
+    },
+    "观测于": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Observed at"
           }
         }
       }

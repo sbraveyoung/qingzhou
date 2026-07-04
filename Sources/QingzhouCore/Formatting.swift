@@ -16,4 +16,9 @@ public enum ByteFormatter {
         }
         return String(format: "%.2f %@", v, units[idx])
     }
+
+    /// 速率格式化：`12.3 MB/s` / `840 KB/s`。用于被动带宽观测展示。
+    public static func speed(_ bytesPerSec: Int64) -> String {
+        format(bytesPerSec) + "/s"
+    }
 }

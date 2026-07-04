@@ -26,6 +26,12 @@ public struct Node: Identifiable, Codable, Sendable, Hashable {
     /// 是两个维度：直连快 ≠ 代理链路快。nil 表示未测或失败。
     public var lastProxiedLatencyMs: Int?
     public var lastProxiedTestedAt: Date?
+    /// 被动观测到的**峰值下行速率**（byte/s）：用户正常上网时，扩展在 TUN 层数的真实下行
+    /// 速率里，这个节点当当前节点期间跑出的最大值。**零额外流量**——用的是真实流量，
+    /// 反映这个节点在这台设备/这个网络下的真实带宽（延迟测不出带宽，这是补充维度）。
+    /// nil = 还没在实际使用中观测到。设备本地瞬态，不上云（跨设备/网络没有可比性）。
+    public var observedPeakDownBps: Int64?
+    public var observedBandwidthAt: Date?
     public var subscriptionId: UUID?      // 来自哪条订阅；nil 表示手动添加
 
     public init(
@@ -44,6 +50,8 @@ public struct Node: Identifiable, Codable, Sendable, Hashable {
         lastTestedAt: Date? = nil,
         lastProxiedLatencyMs: Int? = nil,
         lastProxiedTestedAt: Date? = nil,
+        observedPeakDownBps: Int64? = nil,
+        observedBandwidthAt: Date? = nil,
         subscriptionId: UUID? = nil
     ) {
         self.id = id
@@ -61,6 +69,8 @@ public struct Node: Identifiable, Codable, Sendable, Hashable {
         self.lastTestedAt = lastTestedAt
         self.lastProxiedLatencyMs = lastProxiedLatencyMs
         self.lastProxiedTestedAt = lastProxiedTestedAt
+        self.observedPeakDownBps = observedPeakDownBps
+        self.observedBandwidthAt = observedBandwidthAt
         self.subscriptionId = subscriptionId
     }
 }

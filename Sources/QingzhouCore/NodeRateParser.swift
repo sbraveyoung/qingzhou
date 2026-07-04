@@ -20,28 +20,31 @@ public enum NodeRateParser {
         return fromName(raw)
     }
 
+    // ⚠️ 正则**预编译成静态常量**：`fromName` 在节点列表里每行每次渲染都会被调用
+    //（Node.effectiveRate），若每次 new 一个 NSRegularExpression，30+ 节点 × 每秒刷新
+    // 会把主线程编译到卡死（macOS 上表现为鼠标悬停彩虹转圈 —— 真机踩过）。
+    // 编译一次、复用；匹配本身很便宜。按置信度从高到低排列，命中即返回。
+    private static let delim = #"(?:^|[\s\[\(【（|·:：\-])"#
+    private static let delimEnd = #"(?:$|[\s\]\)】）|·:：\-])"#
+    private static let patterns: [NSRegularExpression] = [
+        // 1) 「倍率[:：] 数字」/「数字 倍」—— 有「倍」字，最不容易误判
+        #"倍率?\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)"#,
+        #"([0-9]+(?:\.[0-9]+)?)\s*倍"#,
+        // 2) 分隔符包裹的「数字 x」/「x 数字」—— 分隔符降低把无关数字误当倍率的概率
+        delim + #"([0-9]+(?:\.[0-9]+)?)\s*[xX×]"# + delimEnd,
+        delim + #"[xX×]\s*([0-9]+(?:\.[0-9]+)?)"# + delimEnd,
+    ].compactMap { try? NSRegularExpression(pattern: $0) }
+
     /// 从节点名里识别倍率。覆盖常见机场写法：
     /// `2x` `2X` `x2` `×2` `2倍` `倍率:1.5` `[3x]` `0.5倍` `| 2x |` `-5x-` 等。
     public static func fromName(_ name: String) -> Double? {
-        // 按置信度从高到低尝试；命中即返回。
-        // 1) 「倍率[:：] 数字」/「数字 倍」—— 有「倍」字，最不容易误判
-        if let v = firstMatch(in: name, pattern: #"倍率?\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)"#) { return v }
-        if let v = firstMatch(in: name, pattern: #"([0-9]+(?:\.[0-9]+)?)\s*倍"#) { return v }
-        // 2) 有分隔符包裹的「数字 x」/「x 数字」—— 分隔符降低把无关数字误当倍率的概率
-        //    分隔符 = 串首尾 / 空白 / 括号 / 竖线 / 中点 / 冒号 / 连字符
-        let delim = #"(?:^|[\s\[\(【（|·:：\-])"#
-        let delimEnd = #"(?:$|[\s\]\)】）|·:：\-])"#
-        if let v = firstMatch(in: name, pattern: delim + #"([0-9]+(?:\.[0-9]+)?)\s*[xX×]"# + delimEnd) { return v }
-        if let v = firstMatch(in: name, pattern: delim + #"[xX×]\s*([0-9]+(?:\.[0-9]+)?)"# + delimEnd) { return v }
+        let range = NSRange(name.startIndex..<name.endIndex, in: name)
+        for re in patterns {
+            guard let m = re.firstMatch(in: name, range: range), m.numberOfRanges >= 2,
+                  let g = Range(m.range(at: 1), in: name),
+                  let v = Double(name[g]) else { continue }
+            if plausibleRange.contains(v) { return v }
+        }
         return nil
-    }
-
-    private static func firstMatch(in text: String, pattern: String) -> Double? {
-        guard let re = try? NSRegularExpression(pattern: pattern) else { return nil }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        guard let m = re.firstMatch(in: text, range: range), m.numberOfRanges >= 2,
-              let g = Range(m.range(at: 1), in: text),
-              let v = Double(text[g]), plausibleRange.contains(v) else { return nil }
-        return v
     }
 }

@@ -1920,9 +1920,28 @@ public final class AppState {
         return fresh
     }
 
+    /// 被动带宽观测的记录下限（byte/s）：低于此的下行速率不算「跑出了带宽」，不更新峰值——
+    /// 否则挂着不用时的零星小流量会把峰值定得毫无意义。100 KB/s ≈ 有真实下载在进行。
+    private static let bandwidthObserveFloorBps: Int64 = 100 * 1024
+
     /// appex 经 App Group 上报的真实 `TrafficStats` 喂进波形窗口。UI 观察 `trafficHistory` 自动重绘。
+    /// 顺手做**被动带宽观测**：把当前节点跑出的下行速率峰值记到该节点上（零额外流量）。
     public func ingestTrafficStats(_ stats: TrafficStats) {
         trafficHistory.record(stats)
+        recordObservedBandwidth(downBps: stats.downloadSpeedBps)
+    }
+
+    /// 把当前节点跑出的下行速率并入它的观测峰值。只在有明显下载（≥ floor）且刷新了峰值时
+    /// 才落盘 —— 峰值只增不减、更新很稀疏，不会每秒刷盘。
+    private func recordObservedBandwidth(downBps: Int64) {
+        guard downBps >= Self.bandwidthObserveFloorBps,
+              let id = currentNodeId,
+              let idx = nodes.firstIndex(where: { $0.id == id }) else { return }
+        if downBps > (nodes[idx].observedPeakDownBps ?? 0) {
+            nodes[idx].observedPeakDownBps = downBps
+            nodes[idx].observedBandwidthAt = Date()
+            persist()
+        }
     }
 
     /// 每秒读 App Group 里 appex 上报的真实流量统计，喂进波形。

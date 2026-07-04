@@ -190,6 +190,9 @@ public enum VaultSnapshotNormalizer {
             // 经代理测速都产生新 revision，把恢复弹窗降噪的努力全吃掉）
             n.lastProxiedLatencyMs = nil
             n.lastProxiedTestedAt = nil
+            // 观测带宽同为设备/网络本地量（跨设备无可比性，且更新频繁）—— 必须剥离
+            n.observedPeakDownBps = nil
+            n.observedBandwidthAt = nil
             return n
         }
         s.subscriptions = s.subscriptions.map { subscription in

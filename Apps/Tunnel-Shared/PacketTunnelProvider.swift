@@ -798,7 +798,10 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 mode: mode,
                 accessLogPath: nil,
                 userRules: userRules,
-                hasFullGeoIP: geo.isFull
+                hasFullGeoIP: geo.isFull,
+                // 预检没有 TUN fd，TestXray 会严格校验接口名 —— 必须传合法的 utunN，
+                // 否则 xray 报「interface name must be utunN」把好配置误判成无效、中止热切换。
+                tunInterfaceName: "utun9"
             )
             try XrayCore.testConfig(configJSON: xrayJSON, datDir: geo.dir)
             return nil

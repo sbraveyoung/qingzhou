@@ -49,13 +49,18 @@ public enum XrayConfigComposer {
     ///     端口由扩展启动时向内核要（XrayCore.getFreePorts），避免写死端口被占用
     ///     导致 xray 起不来。nil = 不开（默认，配置与旧版完全一致）。
     /// - Returns: 可以直接喂给 `XrayCore.run(configJSON:)` 的完整 xray JSON
+    /// - tunInterfaceName: TUN inbound 的接口名。真实连接用 `"utun"`——xray 靠 fd（env
+    ///   TunFdKey）拿接口、忽略这个名字，能跑。但**配置预检（TestXray）没有 fd，会严格
+    ///   校验名字**，xray 要求 `utunN`（带数字），`"utun"` 会报「interface name must be
+    ///   utunN」→ 预检误判配置无效、中止热切换（真机踩过）。所以预检路径传合法的 `"utun9"`。
     public static func compose(
         outboundsJSON: String,
         mode: ProxyMode,
         accessLogPath: String? = nil,
         userRules: [Rule] = [],
         hasFullGeoIP: Bool = false,
-        metricsPort: Int? = nil
+        metricsPort: Int? = nil,
+        tunInterfaceName: String = "utun"
     ) throws -> String {
         guard let data = outboundsJSON.data(using: .utf8),
               let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -95,7 +100,7 @@ public enum XrayConfigComposer {
             "tag": "tun-in",
             "protocol": "tun",
             "settings": [
-                "name": "utun",
+                "name": tunInterfaceName,
                 "MTU": 1500
             ],
             "sniffing": [

@@ -28,6 +28,19 @@ final class XrayConfigComposerTests: XCTestCase {
 
     // MARK: - 结构性测试
 
+    func testTunInterfaceNameDefaultAndOverride() throws {
+        // 真连接默认用 "utun"（xray 靠 fd 拿接口、忽略名字）
+        let real = try parse(try XrayConfigComposer.compose(outboundsJSON: fakeTrojanOutbounds, mode: .global))
+        let realTun = (real["inbounds"] as! [[String: Any]])[0]["settings"] as! [String: Any]
+        XCTAssertEqual(realTun["name"] as? String, "utun")
+
+        // 预检路径传合法 utunN —— TestXray 没有 fd 会严格校验名字，"utun" 会被拒
+        let test = try parse(try XrayConfigComposer.compose(
+            outboundsJSON: fakeTrojanOutbounds, mode: .global, tunInterfaceName: "utun9"))
+        let testTun = (test["inbounds"] as! [[String: Any]])[0]["settings"] as! [String: Any]
+        XCTAssertEqual(testTun["name"] as? String, "utun9")
+    }
+
     func testComposeWrapsOutboundIntoFullConfigGlobal() throws {
         let composed = try XrayConfigComposer.compose(outboundsJSON: fakeTrojanOutbounds, mode: .global)
 

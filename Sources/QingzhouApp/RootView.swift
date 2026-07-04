@@ -4,6 +4,8 @@ import QingzhouCore
 /// 跨平台根视图。iOS 用 TabView，macOS 用 NavigationSplitView。
 public struct RootView: View {
     @Bindable public var state: AppState
+    /// 「更新」按钮打开 App Store 页面（trackViewUrl）用。
+    @Environment(\.openURL) private var openURL
 
     public init(state: AppState) {
         self.state = state
@@ -30,6 +32,25 @@ public struct RootView: View {
                 // 单条长字面量（不用 + 拼接）以命中本地化 —— Text("a"+"b") 会落到 Text(String) 重载不翻译。
                 Text("内容：\(offer.header.contentSummary)\n来自 \(offer.header.deviceName)，\(offer.header.modifiedAt.formatted(date: .abbreviated, time: .shortened))。\n恢复会用它覆盖本机配置；本机当前配置会先自动备份。")
             }
+            // App 内更新提醒：启动时静默查到 App Store 有新版本才弹。系统更新照常，这里只提示。
+            .alert(
+                updateAlertTitle,
+                isPresented: updateAlertBinding,
+                presenting: state.availableUpdate
+            ) { update in
+                Button("更新") {
+                    if let url = update.trackViewURL { openURL(url) }
+                    state.dismissUpdate()
+                }
+                Button("忽略此版本") { state.ignoreUpdate(update.version) }
+                Button("稍后", role: .cancel) { state.dismissUpdate() }
+            } message: { update in
+                if let notes = update.releaseNotes, !notes.isEmpty {
+                    Text(notes)
+                } else {
+                    Text("有新版本可在 App Store 更新。")
+                }
+            }
     }
 
     /// alert 的显隐 Binding：关掉（点按钮 / 系统 dismiss）等价于「暂不恢复」。
@@ -37,6 +58,19 @@ public struct RootView: View {
         Binding(
             get: { state.cloudRestoreOffer != nil },
             set: { if !$0 { state.declineCloudRestore() } }
+        )
+    }
+
+    /// 更新 alert 的标题（带版本号）。只在 availableUpdate 非 nil 时呈现，故此处读得到版本。
+    private var updateAlertTitle: Text {
+        Text("发现新版本 \(state.availableUpdate?.version ?? "")")
+    }
+
+    /// 更新 alert 的显隐 Binding：关掉（点按钮 / 系统 dismiss）等价于「稍后」——不记忽略，下次再提示。
+    private var updateAlertBinding: Binding<Bool> {
+        Binding(
+            get: { state.availableUpdate != nil },
+            set: { if !$0 { state.dismissUpdate() } }
         )
     }
 

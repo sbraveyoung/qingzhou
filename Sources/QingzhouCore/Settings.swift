@@ -63,6 +63,9 @@ public struct Settings: Codable, Sendable {
     /// 语义是「本次连接」的定时：到点断开后不自动重开，手动重开重新计时。
     /// 倒计时在隧道扩展进程里生效 —— 主 App 被系统回收也照样到点关。
     public var autoStopSeconds: TimeInterval
+    /// 用户「忽略此版本」选中的 App Store 版本号（App 内更新提醒用）。
+    /// 同一版本不再提示；出了更新的版本（语义化比较更大）才会再提示。"" = 没忽略过任何版本。
+    public var ignoredUpdateVersion: String
 
     public init(
         proxyMode: ProxyMode = .rule,
@@ -84,7 +87,8 @@ public struct Settings: Codable, Sendable {
         autoConnectOnAppLaunch: Bool = false,
         autoConnectApps: Set<String> = [],
         iCloudSyncEnabled: Bool = true,
-        autoStopSeconds: TimeInterval = 0
+        autoStopSeconds: TimeInterval = 0,
+        ignoredUpdateVersion: String = ""
     ) {
         self.proxyMode = proxyMode
         self.autoSelectTrigger = autoSelectTrigger
@@ -106,6 +110,7 @@ public struct Settings: Codable, Sendable {
         self.autoConnectApps = autoConnectApps
         self.iCloudSyncEnabled = iCloudSyncEnabled
         self.autoStopSeconds = autoStopSeconds
+        self.ignoredUpdateVersion = ignoredUpdateVersion
     }
 
     /// 旧版没有这些 interval 字段；解码时给个默认值。
@@ -122,6 +127,7 @@ public struct Settings: Codable, Sendable {
         case autoConnectOnAppLaunch, autoConnectApps
         case iCloudSyncEnabled
         case autoStopSeconds
+        case ignoredUpdateVersion
     }
 
     public init(from decoder: Decoder) throws {
@@ -149,5 +155,6 @@ public struct Settings: Codable, Sendable {
         self.autoConnectApps = try c.decodeIfPresent(Set<String>.self, forKey: .autoConnectApps) ?? []
         self.iCloudSyncEnabled = try c.decodeIfPresent(Bool.self, forKey: .iCloudSyncEnabled) ?? true
         self.autoStopSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .autoStopSeconds) ?? 0
+        self.ignoredUpdateVersion = try c.decodeIfPresent(String.self, forKey: .ignoredUpdateVersion) ?? ""
     }
 }

@@ -115,4 +115,27 @@ final class SettingsMigrationTests: XCTestCase {
     func testAutoStopDefaultIsOff() {
         XCTAssertEqual(Settings().autoStopSeconds, 0)
     }
+
+    // MARK: - ignoredUpdateVersion（App 内更新提醒）
+
+    /// 旧 JSON 没有 ignoredUpdateVersion → 默认 ""（从未忽略），解码不能崩。
+    func testDecodeWithoutIgnoredUpdateVersionDefaultsToEmpty() throws {
+        XCTAssertEqual(try decode("{}").ignoredUpdateVersion, "")
+        let old = try decode("""
+        { "proxyMode": "global", "autoSelectTrigger": "off", "logLevel": "WARN" }
+        """)
+        XCTAssertEqual(old.ignoredUpdateVersion, "")
+    }
+
+    func testIgnoredUpdateVersionRoundtrips() throws {
+        var s = Settings()
+        s.ignoredUpdateVersion = "1.5.0"
+        let data = try JSONEncoder().encode(s)
+        let reloaded = try JSONDecoder().decode(Settings.self, from: data)
+        XCTAssertEqual(reloaded.ignoredUpdateVersion, "1.5.0")
+    }
+
+    func testIgnoredUpdateVersionDefaultIsEmpty() {
+        XCTAssertEqual(Settings().ignoredUpdateVersion, "")
+    }
 }

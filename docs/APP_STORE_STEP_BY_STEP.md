@@ -56,8 +56,16 @@
 
 ## 阶段 3 · ASC 建 App（15 分钟，你来）
 
+> ⚠️ **iOS 和 macOS 必须各自建独立 App 记录，不能勾在同一个里。** ASC 的「一个 App 记录
+> 多平台」（勾 iOS + macOS）要求**两个平台用同一个 Bundle ID**；而轻舟 iOS 是
+> `com.sbraveyoung.qingzhou.ios`、macOS 是 `com.sbraveyoung.qingzhou.mac`，**Bundle ID 不同**，
+> 所以只能分开建。现在**只建 iOS、只勾 iOS 平台**；macOS 以后单独建一条记录（且 macOS 的
+> content filter 系统扩展在 MAS 的分发路径要单独查，本就该晚一版）。
+> （想让两平台共用一条记录/共享评分，得把 macOS 也改成同一个 Bundle ID —— 那是一次不小的
+> 重构，扩展/entitlement/App Group 全要重来，不值当，保持分开即可。）
+
 **3.1** 👤 [ASC → Apps → +（新建 App）](https://appstoreconnect.apple.com/apps)：
-- 平台：**iOS**（macOS 建议晚一版单独上，见文末）
+- 平台：**只勾 iOS**（macOS 以后单独建记录，见上方警告）
 - 名称：**轻舟 Qingzhou**（「轻舟」已被占，见 APP_STORE.md §3.1 候选序列；桌面显示名仍是「轻舟」不受影响）
 - 主要语言：**简体中文**
 - Bundle ID：选 `com.sbraveyoung.qingzhou.ios`

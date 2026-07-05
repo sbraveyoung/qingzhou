@@ -4,6 +4,20 @@
 > 每步标了「谁做」（👤=你手动 / 🤖=Claude 能代劳，喊我）。元数据文案见
 > [APP_STORE.md](APP_STORE.md) §3；隐私政策见 [PRIVACY.md](PRIVACY.md)；上架前功能验收见
 > [ACCEPTANCE.md](ACCEPTANCE.md)。
+
+## ⚡ 实况更新（2026-07-06，登录 Dev Portal / ASC 实查）
+
+- **账号是「原地转换」成组织的，Team ID 没变，仍是 `UK7MME38H9`**（Membership 页实查：
+  注册身份=组织，法人 Beijing Xiangshui Zhouxing Technology Co., Ltd.）。
+  → **阶段 0.4 和阶段 1 整个免做**：`project.yml` 的 `DEVELOPMENT_TEAM` 本来就对，
+  identifiers / App Group / iCloud 容器 / profile 全部继续有效。
+- **阶段 3 已完成**：ASC 记录「轻舟 Qingzhou」已建（Apple ID 6787037928），版本 1.0 状态「准备提交」。
+- **阶段 7 走到一半**：build **1.0 (2)** 已上传并处理完成，内部测试群组已建、
+  内部测试员 sbraveyoung@gmail.com 已加；**还没人安装测试**（邀请/安装数全是 0）。
+- ⚠️ **新发现（ASC 横幅）**：欧盟《数字服务法》(DSA) 要求先提供**交易商状态**才能向
+  欧盟地区提交 —— 要么在 ASC「商务」里填交易商信息，要么上架地区**不勾欧盟**（更省事）。
+- 剩余主线：👤 手机装 TestFlight build 自测 → 👤+🤖 截图 → 👤 填元数据/隐私/合规/审核备注
+  （文案我都备好了，见 APP_STORE.md §3/§5）→ 内测 1 周 → 提审。
 >
 > **术语**：ASC = App Store Connect（appstoreconnect.apple.com）；
 > Dev Portal = developer.apple.com/account（证书、Identifiers、Profiles）。

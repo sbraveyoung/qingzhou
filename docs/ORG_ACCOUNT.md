@@ -1,7 +1,8 @@
 # Apple Developer Organization 账号 — 从 Individual 升级 / 注册指南
 
-> ✅ **已完成（2026-07-03）**：组织账号注册完成,[App Store 上架](APP_STORE.md) 的硬阻塞解除,
-> 后续在新 org team 下重建签名资产的步骤见 [APP_STORE.md §10](APP_STORE.md)。
+> ✅ **已完成（2026-07-03）**：组织账号注册完成,[App Store 上架](APP_STORE.md) 的硬阻塞解除。
+> ⚠️ **2026-07-06 实查修正**：是**原地转换**而非新账号,Team ID 没变（`UK7MME38H9`），
+> 签名资产无需重建 —— 本文与 APP_STORE.md §10 里「新 team 重建」的说法作废。
 > 以下保留注册过程指南备查。
 >
 > 背景：个人(Individual) Apple Developer 账号无法提交 VPN 类 App,必须用 Organization 账号

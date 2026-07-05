@@ -22,8 +22,9 @@ Apple App Store Review Guideline 5.4 原文：
 - ~~方案 B：跟一个已有 Organization 账号的朋友 / 工作室合作,以他们名义提交~~（不再需要）
 - ~~方案 C：先以 TestFlight 内测形式分发~~（不再需要作为替代方案；TestFlight 仍是正式提审前的内测环节）
 
-**注意**：新 Org 账号 = **新 Team ID**,所有签名资产（Bundle ID / App Group / NE capability /
-iCloud 容器 / 证书 / profile）都要在新 team 下重建,踩坑点见 §10。
+**注意（2026-07-06 实查修正）**：账号是**原地转换**成组织的,Team ID **没变**,仍是
+`UK7MME38H9` —— 所有签名资产（Bundle ID / App Group / NE capability / iCloud 容器 /
+证书 / profile）**继续有效,无需重建**,§10 的「新 team 重建」清单整节作废。
 
 ### 0.2 中国 App Store 现实
 
@@ -370,8 +371,9 @@ Archive 完成后从 Organizer 上传到 App Store Connect (按 "Distribute App"
 ## 10. 接下来的下一步（组织账号已就位,2026-07-03 更新）
 
 > 前提已达成：✅ 组织账号注册完成（见 §0.1）。下面按顺序走,每步做完勾掉。
-> 贯穿注意：**新 Org 账号是全新 Team ID**,原个人账号 (Team `UK7MME38H9`) 下的所有
-> 签名资产都不通用,要在新 team 下重建。
+> ⚠️ **2026-07-06 实查修正**：账号是**原地转换**,Team ID 仍是 `UK7MME38H9`,
+> 签名资产全部继续有效 —— **§10.1 的重建清单不用做**。实际进度以
+> [APP_STORE_STEP_BY_STEP.md](APP_STORE_STEP_BY_STEP.md) 顶部「实况更新」为准。
 
 ### 10.1 新 team 下重建 identifier / capability
 

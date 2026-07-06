@@ -9,6 +9,8 @@ public struct ConnectionsView: View {
     /// 「忽略 IP」过滤：临时状态，不持久化 —— 离开本页自动复位。
     /// 经 Binding 传给域名分析页，两页联动。
     @State private var hideBareIPs = false
+    /// 「隐藏 DNS」过滤：同款临时状态，两页联动。
+    @State private var hideDNS = false
 
     enum ConnectionFilter: String, CaseIterable, Identifiable {
         case active = "活跃"
@@ -22,7 +24,7 @@ public struct ConnectionsView: View {
     public var body: some View {
         let result = filtered
         VStack(spacing: 0) {
-            controls(hiddenIPCount: result.hiddenIPCount)
+            controls(hiddenIPCount: result.hiddenIPCount, hiddenDNSCount: result.hiddenDNSCount)
             if result.visible.isEmpty {
                 let empty = Self.emptyState(filter: filter, searching: !keyword.isEmpty,
                                             hiddenIPCount: result.hiddenIPCount,
@@ -61,7 +63,7 @@ public struct ConnectionsView: View {
         }
         .sheet(isPresented: $showDomainAnalysis) {
             NavigationStack {
-                DomainAnalysisView(state: state, hideBareIPs: $hideBareIPs)
+                DomainAnalysisView(state: state, hideBareIPs: $hideBareIPs, hideDNS: $hideDNS)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("完成") { showDomainAnalysis = false }
@@ -104,44 +106,56 @@ public struct ConnectionsView: View {
                 "antenna.radiowaves.left.and.right.slash")
     }
 
-    private func controls(hiddenIPCount: Int) -> some View {
+    private func controls(hiddenIPCount: Int, hiddenDNSCount: Int) -> some View {
         VStack(spacing: 4) {
-            HStack(spacing: 8) {
-                Picker("", selection: $filter) {
-                    ForEach(ConnectionFilter.allCases) { f in
-                        Text(L10n.lookup(f.rawValue)).tag(f)
-                    }
+            Picker("", selection: $filter) {
+                ForEach(ConnectionFilter.allCases) { f in
+                    Text(L10n.lookup(f.rawValue)).tag(f)
                 }
-                .pickerStyle(.segmented)
-                // 放在分段控件旁而不是 toolbar：iOS 工具栏空间紧，这里文字能完整展示
+            }
+            .pickerStyle(.segmented)
+            // 两个过滤开关并排在分段控件下方：iOS 工具栏空间紧，这里文字能完整展示
+            HStack(spacing: 8) {
                 IgnoreIPToggle(isOn: $hideBareIPs)
+                HideDNSToggle(isOn: $hideDNS)
+                Spacer()
             }
             // DoH 检测：裸 IP 连接占比异常高时说明原因（可关闭，会话级）
             if DoHNoticeBanner.shouldShow(state: state) {
                 DoHNoticeBanner(state: state)
             }
-            // 过滤生效时的轻提示：避免用户忘了开着「忽略 IP」，以为数据丢了
+            // 过滤生效时的轻提示：避免用户忘了开着过滤，以为数据丢了
             if hiddenIPCount > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "eye.slash").imageScale(.small)
-                    Text("忽略 IP：已隐藏 \(hiddenIPCount) 条纯 IP 连接")
-                }
-                .font(.caption2)
-                .foregroundStyle(.orange)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                filterHint(icon: "eye.slash", text: L("忽略 IP：已隐藏 \(hiddenIPCount) 条纯 IP 连接"))
+            }
+            if hiddenDNSCount > 0 {
+                filterHint(icon: "point.3.filled.connected.trianglepath.dotted",
+                           text: L("隐藏 DNS：已隐藏 \(hiddenDNSCount) 条 DNS 查询"))
             }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
     }
 
-    /// 三层过滤：状态（活跃/已关闭）→ 关键字 → 「忽略 IP」。
-    /// `hiddenIPCount` 只统计前两层已命中、仅因裸 IP 被隐藏的条数，用于轻提示。
-    private var filtered: (visible: [Connection], hiddenIPCount: Int) {
+    private func filterHint(icon: String, text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).imageScale(.small)
+            Text(text)
+        }
+        .font(.caption2)
+        .foregroundStyle(.orange)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 四层过滤：状态（活跃/已关闭）→ 关键字 →「隐藏 DNS」→「忽略 IP」。
+    /// `hiddenIPCount` / `hiddenDNSCount` 只统计前面层已命中、仅因该项被隐藏的条数，
+    /// 用于轻提示。DNS 判定在「忽略 IP」之前：DNS 查询目标是 IP，两个开关都会命中它，
+    /// 先归给 DNS 计数更贴合用户心智（这条被隐藏是因为它是 DNS，不是因为它是裸 IP）。
+    private var filtered: (visible: [Connection], hiddenIPCount: Int, hiddenDNSCount: Int) {
         let kw = keyword.lowercased()
-        let hideIP = hideBareIPs
         var visible: [Connection] = []
         var hiddenIP = 0
+        var hiddenDNS = 0
         for c in state.connections {
             let scopeOK: Bool
             switch filter {
@@ -155,7 +169,11 @@ public struct ConnectionsView: View {
                 || c.matchedRule.lowercased().contains(kw)
                 || (c.sourceApp?.lowercased().contains(kw) ?? false)
             guard scopeOK && kwOK else { continue }
-            if hideIP && HostClassifier.isBareIP(c.targetHost) {
+            if hideDNS && c.isDNSQuery {
+                hiddenDNS += 1
+                continue
+            }
+            if hideBareIPs && HostClassifier.isBareIP(c.targetHost) {
                 hiddenIP += 1
                 continue
             }
@@ -165,7 +183,7 @@ public struct ConnectionsView: View {
         if filter == .closed {
             visible.sort { ($0.closedAt ?? .distantPast) > ($1.closedAt ?? .distantPast) }
         }
-        return (visible, hiddenIP)
+        return (visible, hiddenIP, hiddenDNS)
     }
 
     private func connectionRow(_ c: Connection) -> some View {
@@ -176,6 +194,15 @@ public struct ConnectionsView: View {
                     .frame(width: 8, height: 8)
                 Text(c.targetHost).font(.headline)
                 Spacer()
+                // DNS 查询标注：一眼区分「隧道解析查询」和「用户主动访问」
+                if c.isDNSQuery {
+                    Text("DNS")
+                        .font(.caption2.monospaced().weight(.semibold))
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.18))
+                        .foregroundStyle(.blue)
+                        .clipShape(Capsule())
+                }
                 Text(c.type.rawValue.uppercased())
                     .font(.caption2.monospaced())
                     .padding(.horizontal, 6).padding(.vertical, 2)

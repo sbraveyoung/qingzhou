@@ -7,6 +7,8 @@ public struct DomainAnalysisView: View {
     @Bindable var state: AppState
     /// 「忽略 IP」过滤：来自 ConnectionsView 的临时状态（不持久化），两页联动。
     @Binding var hideBareIPs: Bool
+    /// 「隐藏 DNS」过滤：同款临时状态，两页联动。
+    @Binding var hideDNS: Bool
     @State private var mode = 0
     /// 域名关键字搜索：作用于所有 tab（页内搜索框 —— 本页是 sheet，
     /// macOS 上 .searchable 在 sheet 的 toolbar 里没有稳定落点，页内框两平台一致）。
@@ -19,17 +21,20 @@ public struct DomainAnalysisView: View {
     @State private var appTabAvailable = false
     #endif
 
-    public init(state: AppState, hideBareIPs: Binding<Bool>) {
+    public init(state: AppState, hideBareIPs: Binding<Bool>, hideDNS: Binding<Bool>) {
         self.state = state
         self._hideBareIPs = hideBareIPs
+        self._hideDNS = hideDNS
     }
 
     public var body: some View {
-        // 「忽略 IP」过滤（与连接页联动）：裸 IP 目标在聚合前剔除 ——
-        // FakeDNS 反查不到域名的连接对域名分析没有价值。
-        let unsearched = hideBareIPs
-            ? state.connections.filter { !HostClassifier.isBareIP($0.targetHost) }
-            : state.connections
+        // 过滤（与连接页联动）：DNS 查询（隧道内部解析，非用户访问）+ 裸 IP 目标
+        //（FakeDNS 反查不到域名，对域名分析无价值）在聚合前剔除。
+        let unsearched = state.connections.filter {
+            if hideDNS && $0.isDNSQuery { return false }
+            if hideBareIPs && HostClassifier.isBareIP($0.targetHost) { return false }
+            return true
+        }
         let hiddenIPCount = state.connections.count - unsearched.count
         // 搜索：在连接层（聚合之前）按域名关键字过滤 —— 域名/建议/应用三个 tab 吃同一份
         // 过滤结果，口径天然一致；「每日」吃持久化 digest，用 filtered(byDomainKeyword:) 单独过。
@@ -203,8 +208,11 @@ public struct DomainAnalysisView: View {
             ToolbarItem(placement: .primaryAction) {
                 IgnoreIPToggle(isOn: $hideBareIPs)
             }
+            ToolbarItem(placement: .primaryAction) {
+                HideDNSToggle(isOn: $hideDNS)
+            }
             ToolbarItem {
-                // 导出当前过滤视图（搜索 + 忽略 IP 生效后的域名聚合），空数据禁用
+                // 导出当前过滤视图（搜索 + 忽略 IP + 隐藏 DNS 生效后的域名聚合），空数据禁用
                 DomainStatsExportButton(stats: stats, state: state)
             }
         }

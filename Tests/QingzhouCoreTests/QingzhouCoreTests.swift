@@ -102,6 +102,29 @@ final class QingzhouCoreTests: XCTestCase {
         XCTAssertFalse(closed.isActive)
     }
 
+    func testConnectionTargetPortAndDNS() {
+        // 常规 IPv4 DNS 查询：端口 53 → isDNSQuery
+        let dns = Connection(targetHost: "8.8.8.8", sourceAddress: "10.0.0.1:5",
+                             targetAddress: "8.8.8.8:53", type: .udp, route: "DIRECT", matchedRule: "")
+        XCTAssertEqual(dns.targetPort, 53)
+        XCTAssertTrue(dns.isDNSQuery)
+        // 普通 HTTPS：443 → 不是 DNS
+        let https = Connection(targetHost: "example.com", sourceAddress: "10.0.0.1:6",
+                               targetAddress: "example.com:443", type: .https, route: "PROXY", matchedRule: "")
+        XCTAssertEqual(https.targetPort, 443)
+        XCTAssertFalse(https.isDNSQuery)
+        // IPv6 目标：端口靠已知 targetHost 前缀剥出，不被地址里的冒号干扰
+        let v6 = Connection(targetHost: "2606:4700:4700::1111", sourceAddress: "[::1]:7",
+                            targetAddress: "2606:4700:4700::1111:53", type: .udp, route: "DIRECT", matchedRule: "")
+        XCTAssertEqual(v6.targetPort, 53)
+        XCTAssertTrue(v6.isDNSQuery)
+        // 域名里恰好含 :53 的假阳性防护：host 前缀对不上 → nil，不误判
+        let tricky = Connection(targetHost: "a.com", sourceAddress: "10.0.0.1:8",
+                                targetAddress: "b.com:53", type: .tcp, route: "PROXY", matchedRule: "")
+        XCTAssertNil(tricky.targetPort)
+        XCTAssertFalse(tricky.isDNSQuery)
+    }
+
     // MARK: - ByteFormatter
 
     func testByteFormatter() {

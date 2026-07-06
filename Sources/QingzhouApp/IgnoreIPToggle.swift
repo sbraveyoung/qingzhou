@@ -28,3 +28,26 @@ struct IgnoreIPToggle: View {
         .help("隐藏目标是纯 IP（没有域名）的条目；离开页面自动恢复")
     }
 }
+
+/// 「隐藏 DNS」过滤开关 —— 与「忽略 IP」同款交互（临时、不持久化、两页联动）。
+/// 隧道内部 xray 向上游 DNS（223.5.5.5 / 8.8.8.8 / 1.1.1.1）查询本身也是连接，
+/// 不是用户主动访问，开这个开关把它们从列表 / 统计里藏掉。
+struct HideDNSToggle: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            #if os(iOS)
+            HStack(spacing: 4) {
+                Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                Text("隐藏 DNS")
+            }
+            #else
+            Label("隐藏 DNS", systemImage: "point.3.filled.connected.trianglepath.dotted")
+                .labelStyle(.titleAndIcon)
+            #endif
+        }
+        .toggleStyle(.button)
+        .help("隐藏隧道内部向上游 DNS 服务器（如 8.8.8.8:53）的解析查询；离开页面自动恢复")
+    }
+}

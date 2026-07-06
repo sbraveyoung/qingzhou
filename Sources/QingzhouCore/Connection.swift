@@ -59,6 +59,19 @@ public struct Connection: Identifiable, Codable, Sendable, Hashable {
     }
 
     public var isActive: Bool { closedAt == nil }
+
+    /// 目标端口。`targetAddress` 是 `"\(targetHost):\(port)"` —— 已知 targetHost，
+    /// 剥掉「host:」前缀即得端口，IPv6 也无歧义（不靠"最后一个冒号"猜）。
+    public var targetPort: Int? {
+        let prefix = targetHost + ":"
+        guard targetAddress.hasPrefix(prefix) else { return nil }
+        return Int(targetAddress.dropFirst(prefix.count))
+    }
+
+    /// 是否是 DNS 查询（目标端口 53）。轻舟隧道内部 xray 的 DNS 模块向上游
+    /// （223.5.5.5 / 8.8.8.8 / 1.1.1.1）查询时，这些查询本身也是连接、会记进
+    /// access log —— 不是用户主动访问，连接页可据此标注 / 过滤。
+    public var isDNSQuery: Bool { targetPort == 53 }
 }
 
 public extension Connection {

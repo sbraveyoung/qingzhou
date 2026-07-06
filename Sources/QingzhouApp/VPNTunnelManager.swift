@@ -207,6 +207,22 @@ public final class VPNTunnelManager {
         try await sendCommand(msg, timeoutSeconds: 5, timeoutLabel: L("原地重配超时"), failureLabel: L("扩展重配失败"))
     }
 
+    /// 原地换节点：给**运行中**的扩展发新节点，扩展在不重启 xray 的前提下热替换
+    /// "proxy" outbound handler（libXray 本地扩展 SwitchOutbound）——
+    /// 隧道 / TUN / 路由 / DNS 全不动，换节点零断流、系统 VPN 图标不闪。
+    /// 只适用于 mode / 规则不变、仅换节点的场景；失败 throws，调用方回退全量重启。
+    public func switchNodeInPlace(node: Node, shareLink: String) async throws {
+        try await sendCommand(
+            [
+                "command": "switchNode",
+                "nodeJSON": Self.encodeNodeJSON(node),
+                "shareLink": shareLink,
+                "nodeName": node.name
+            ],
+            timeoutSeconds: 5, timeoutLabel: L("原地换节点超时"), failureLabel: L("扩展换节点失败")
+        )
+    }
+
     /// 给**运行中**的扩展重设定时关闭（从现在起按新时长重新计时；0 = 取消定时）。
     /// 不重启隧道、不断流。失败（拿不到会话 / 超时）throws —— 调用方降级为「下次连接生效」。
     /// 注意：这只改扩展进程里的计时器；On-Demand 开关由调用方另行经 setOnDemandEnabled 落盘。

@@ -727,6 +727,38 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         bringUpXray(configJSON: xrayJSON, completionHandler: reply)
     }
 
+    /// 原地换节点：不动 TUN / 桥 / xray 实例本身，只把 "proxy" outbound handler
+    /// 热替换成新节点（libXray 本地扩展 SwitchOutbound，见 scripts/patches/libxray/）。
+    /// 路由规则指向的 tag 不变，新连接立刻走新出口 —— 换节点零断流、图标不闪。
+    /// 失败回错，主 App 回退到全量重启（安全网）。
+    private func switchNode(nodeJSON: String, shareLink: String, nodeName: String,
+                            reply: @escaping (Error?) -> Void) {
+        os_log("switchNode → node=%{public}@ (in-place, tunnel kept alive)",
+               log: log, type: .default, nodeName)
+        do {
+            let outboundsJSON = try resolveOutboundsJSON(nodeJSON: nodeJSON, shareLink: shareLink)
+            guard let data = outboundsJSON.data(using: .utf8),
+                  var arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+                  !arr.isEmpty else {
+                throw NSError(domain: "com.sbraveyoung.qingzhou.tunnel", code: 1008,
+                              userInfo: [NSLocalizedDescriptionKey: "节点转换结果为空"])
+            }
+            // 与 XrayConfigComposer 同一约定：第一个 outbound 是节点本体，tag = "proxy"
+            var outbound = arr[0]
+            outbound["tag"] = "proxy"
+            let outboundJSON = String(
+                data: try JSONSerialization.data(withJSONObject: outbound),
+                encoding: .utf8) ?? "{}"
+            try XrayCore.switchOutbound(outboundJSON: outboundJSON)
+            os_log("switchNode done: proxy outbound now %{public}@", log: log, type: .default, nodeName)
+            reply(nil)
+        } catch {
+            os_log("switchNode failed (%{public}@) — app will fall back to full restart",
+                   log: log, type: .error, error.localizedDescription)
+            reply(error)
+        }
+    }
+
     // MARK: - 经代理延迟（pingNode）/ 配置预检（testNode）—— probeQueue 上串行跑
 
     /// 「经代理延迟」：给节点起一个临时 xray 实例（socks inbound + 该节点 outbound），
@@ -826,6 +858,19 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 userRules: loadUserRules(inlineData: nil,
                                          base64: obj["userRulesGZ"],
                                          path: obj["userRulesPath"])
+            ) { error in
+                let payload: [String: Any] = error == nil
+                    ? ["ok": true]
+                    : ["ok": false, "error": error!.localizedDescription]
+                completionHandler?(try? JSONSerialization.data(withJSONObject: payload))
+            }
+        case "switchNode":
+            // 原地换节点（Go 调用毫秒级返回，直接在当前线程做，不排 probeQueue ——
+            // 那里可能被 15 秒的 pingNode 占着，切换不该排在测速后面）。
+            switchNode(
+                nodeJSON: obj["nodeJSON"] ?? "",
+                shareLink: obj["shareLink"] ?? "",
+                nodeName: obj["nodeName"] ?? "node"
             ) { error in
                 let payload: [String: Any] = error == nil
                     ? ["ok": true]

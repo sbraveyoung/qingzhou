@@ -182,7 +182,11 @@ public final class AppState {
     private var ipRefreshTask: Task<Void, Never>?
     /// 热切换进行中又来了新的切换请求（快速连点节点）：记 pending，当前轮收尾后再跑一轮。
     /// 不并发跑两个 reapply —— stop/start 交错会打架。
-    private var pendingReapply = false
+    /// 热切换的范围：nodeOnly = 只换节点（mode / 规则没变，可走扩展内原地换出口，
+    /// 零断流）；full = 模式 / 规则 / 恢复等也变了，必须全量重启隧道。
+    public enum ReapplyScope { case nodeOnly, full }
+    /// 热切换进行中又来一次请求时的合并暂存：nil = 无 pending；full 吞并 nodeOnly。
+    private var pendingReapplyScope: ReapplyScope?
     /// access log 文件已读到的字节位置（增量读，不重复解析）。
     private var accessLogOffset: UInt64 = 0
     /// matchedRule 回填器（内含 host→规则 缓存）。规则集 / proxyMode 变化时按 key 重建。
@@ -870,9 +874,9 @@ public final class AppState {
         currentNodeId = node.id
         logger.info("Selected node \(node.name)", category: "app")
         persist()
-        // 手动切节点时若 VPN 在跑，也热切换立即生效
+        // 手动切节点时若 VPN 在跑，也热切换立即生效（只换节点 → 走原地换出口快路径）
         if changed {
-            Task { await reapplyRunningTunnel() }
+            Task { await reapplyRunningTunnel(scope: .nodeOnly) }
         }
     }
 
@@ -1156,18 +1160,21 @@ public final class AppState {
     ///
     /// 防抖：切换进行中再次调用只记 pending；当前轮收尾后发现 pending 就再跑一轮，
     /// 状态里已是最新节点/模式，自动收敛到用户的最终选择。
-    public func reapplyRunningTunnel() async {
+    public func reapplyRunningTunnel(scope: ReapplyScope = .full) async {
         if isSwitchingTunnel {
-            pendingReapply = true
+            // full 吞并 nodeOnly：窗口里叠加的请求按最重的执行，别丢模式/规则变更
+            pendingReapplyScope = (scope == .full || pendingReapplyScope == .full) ? .full : .nodeOnly
             return
         }
-        repeat {
-            pendingReapply = false
-            await performReapply()
-        } while pendingReapply
+        var next: ReapplyScope? = scope
+        while let current = next {
+            pendingReapplyScope = nil
+            await performReapply(scope: current)
+            next = pendingReapplyScope
+        }
     }
 
-    private func performReapply() async {
+    private func performReapply(scope: ReapplyScope) async {
         guard isVPNRunning,
               let node = currentNode,
               let shareLink = NodeEncoder.shareLink(node) else { return }
@@ -1177,6 +1184,34 @@ public final class AppState {
         defer {
             isSwitchingTunnel = false
             WidgetRefresher.reload()
+        }
+        // 快路径：只换节点（mode / 规则没变）时先试扩展内原地换出口（libXray
+        // SwitchOutbound 热替换 "proxy" handler）—— 隧道 / TUN / 路由 / DNS 全不动，
+        // 零断流、系统 VPN 图标不闪。任何失败（xray 没在跑 / 节点构建失败 / 扩展
+        // 超时）都回退到下面的全量重启，原安全网不变。
+        if scope == .nodeOnly {
+            do {
+                // 先落盘新节点配置：扩展若之后被系统回收再由 On-Demand 拉起，用的是
+                // providerConfiguration —— 不落盘会复活成旧节点。saveToPreferences
+                // 不打扰运行中的隧道。
+                try await tunnelManager.configure(
+                    node: node,
+                    mode: settings.proxyMode,
+                    shareLink: shareLink,
+                    rules: effectiveUserRules,
+                    // 原地切换 = 同一会话延续：定时倒计时不重置（扩展侧计时器没动）
+                    autoStopSeconds: settings.autoStopSeconds,
+                    description: L("轻舟 · \(node.name)")
+                )
+                try await tunnelManager.switchNodeInPlace(node: node, shareLink: shareLink)
+                markAllConnectionsClosed()   // 旧 handler 已关，旧代理连接全部终止
+                verifyTunnelConnectivity()   // 新节点未必真可用，哨兵照跑
+                logger.info("In-place switched outbound to \(node.name) — tunnel kept alive", category: "tunnel")
+                return
+            } catch {
+                let reason = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+                logger.warn("In-place switch failed (\(reason)) — falling back to full restart", category: "tunnel")
+            }
         }
         // 配置预检：趁旧隧道还在跑，先让扩展用同款构建流程校验新节点的配置（libXray
         // TestXray）。配置非法 → 不拆在跑的隧道，直接报错返回 —— 否则坏配置会把好隧道
@@ -1245,7 +1280,7 @@ public final class AppState {
             // 再 stop() 让系统回收 TUN / 路由。pending 也作废——VPN 已关，等用户重新开。
             isVPNRunning = false
             connectedSince = nil
-            pendingReapply = false
+            pendingReapplyScope = nil
             try? await tunnelManager.setOnDemandEnabled(false)
             tunnelManager.stop()
         }
@@ -1293,9 +1328,9 @@ public final class AppState {
             logger.warn("Auto-select found no viable node", category: "app")
         }
         persist()
-        // 节点变了且 VPN 在跑 → 热切换，立即生效
+        // 节点变了且 VPN 在跑 → 热切换，立即生效（只换节点 → 走原地换出口快路径）
         if currentNodeId != previousId {
-            await reapplyRunningTunnel()
+            await reapplyRunningTunnel(scope: .nodeOnly)
         }
     }
 

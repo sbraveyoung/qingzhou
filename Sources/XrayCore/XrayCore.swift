@@ -95,6 +95,24 @@ public enum XrayCore {
         #endif
     }
 
+    /// 原地替换运行中 xray 实例的 outbound handler（轻舟对 libXray 的本地扩展，
+    /// 见 scripts/patches/libxray/qingzhou_switch*.go —— 上游没有这个导出，
+    /// 框架必须用 scripts/build-libxray.sh 重新构建后才有符号）。
+    ///
+    /// `outboundJSON` 是 xray 配置 outbounds 数组的**单个元素**（必须带 tag，
+    /// 且与路由规则指向的 tag 一致，本项目约定 "proxy"）。换 handler 不动
+    /// 隧道 / 路由 / DNS —— 换节点零断流。失败抛错，调用方应回退到全量重启。
+    public static func switchOutbound(outboundJSON: String) throws {
+        #if canImport(LibXray)
+        let req = ["outboundJson": outboundJSON]
+        let reqData = try JSONSerialization.data(withJSONObject: req)
+        let respB64 = LibXraySwitchOutbound(reqData.base64EncodedString())
+        try Self.throwIfError(respB64)
+        #else
+        throw XrayError.libXrayNotLinked
+        #endif
+    }
+
     /// 停掉 xray-core 实例。
     @discardableResult
     public static func stop() -> String {

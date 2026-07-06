@@ -147,10 +147,16 @@
   RulesView 已接一键下载 UI + GEOIP 三态提示（完整版就位 / 需下载 / 精简版说明）
 
 **仍待办（真机 / target 层面）**：
-- **热切换改回原地重配**：现在热切换走 stop → 等扩展进程完全退出 → start 全新进程
-  （修 xray 同进程 stop→run 卡死时的刻意取舍，见 `AppState.performReapply` 注释），
-  每次切换都冷启动、重建 geo 匹配器。待真机拿到 xray 卡死的具体报错后，
-  评估恢复 `reconfigureInPlace`（扩展侧 handleAppMessage 代码保留着）实现无感切换（2026-07-02）
+- **无感换节点已实现，待真机验收**（2026-07-06）：libXray 本地扩展 `SwitchOutbound`
+  （`scripts/patches/libxray/qingzhou_switch*.go`）在运行中的 xray 实例上热替换 "proxy"
+  outbound handler —— 换节点不再 stop→start 整条隧道，零断流、图标不闪。主 App 走
+  `performReapply` 的 nodeOnly 快路径（择优/手动选节点），失败自动回退全量重启；
+  切模式/规则仍全量重启（低频）。**验收**：真机开 VPN 持续 ping → 择优/手动切节点
+  → 图标不闪、丢包 0~秒级；日志页出现 "In-place switched outbound to …"；规则模式
+  连续切 20 次无卡死。同批带上：择优黏性滞后（新最优须快 ≥50ms 且 ≥30% 才切）、
+  切换窗口关 On-Demand、计划外断开诊断日志（区分「扩展死亡重启」vs「择优切换」）。
+  旧的「恢复 reconfigureInPlace（整实例 stop→run）」降级为兜底方案，仅在想给模式/规则
+  切换也做无感时再评估（fakedns Close 竞态崩溃已 backport 修复，可能就是当年卡死的根因之一）
 - 流量波形（a1）真机验证一次 → 走 [ACCEPTANCE.md](ACCEPTANCE.md) §2
 - S2 真机测试正式勾掉 → 走 [ACCEPTANCE.md](ACCEPTANCE.md) §3（日常已在用，确认即关闭）
 - **S9 并行实现中**（实现完成后按 [ACCEPTANCE.md](ACCEPTANCE.md) §6 验收）：

@@ -47,10 +47,11 @@
 ## 2. 新增数据结构（唯一的地基工程）
 
 ```
-NodeMetricsHistory：每节点环形 20 条 {at, latencyMs?, proxiedMs?, lossFraction?}
+NodeMetricsHistory：每节点环形 100 条 {at, latencyMs?, proxiedMs?, lossFraction?}
+（P2：20→100，为回放对比实验攒足够长的测量序列；老文件 ≤20 条照常解码、累积到 100 才挤）
 lossFraction = 本轮 burst 丢包率（失败/3）；老文件 JSON 无此字段照常解码（Codable 可选）
 落盘 node-metrics.json（本地瞬态，不上 iCloud，同 domain-history 待遇）
-体量：500 节点 × 20 条 × ~40B ≈ 400KB；全在主 App，不碰扩展 50MB 红线
+体量：500 节点 × 100 条 × ~48B ≈ 2.4MB；全在主 App，不碰扩展 50MB 红线
 ```
 
 **burst 只做直连**：经代理测速不 burst —— 每次都真实走节点发 HTTP，3 倍成本不值当；

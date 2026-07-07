@@ -13,16 +13,44 @@ final class NodeMetricsHistoryTests: XCTestCase {
 
     // MARK: - 环形容量
 
+    /// 容量从 20 提到 100（回放对比实验攒数据）——体量 500 节点 × 100 × ~48B ≈ 2.4MB，可接受。
+    func testCapacityIsHundred() {
+        XCTAssertEqual(NodeMetricsHistory.capacity, 100)
+    }
+
     func testRingKeepsAtMostCapacityDroppingOldest() {
         var history = NodeMetricsHistory()
-        for i in 0..<25 {
+        let overflow = NodeMetricsHistory.capacity + 5
+        for i in 0..<overflow {
             history.recordDirect(fingerprint: fp, latencyMs: i, at: t0.addingTimeInterval(Double(i)))
         }
         let samples = history.samples(for: fp)
         XCTAssertEqual(samples.count, NodeMetricsHistory.capacity)
-        // 最老的 5 条被挤掉，保留 5..24
+        // 最老的 5 条被挤掉，保留 5..(overflow-1)
         XCTAssertEqual(samples.first?.latencyMs, 5)
-        XCTAssertEqual(samples.last?.latencyMs, 24)
+        XCTAssertEqual(samples.last?.latencyMs, overflow - 1)
+    }
+
+    /// 老文件里每节点最多 20 条（旧容量），提容量后加载不受影响：解码只按 JSON 内容
+    /// 建环，不触发 prune —— 20 条照样全数保留，后续新样本累积到 100 才开始挤。
+    func testLegacyTwentySampleRingLoadsAndGrowsToNewCapacity() throws {
+        var legacy = NodeMetricsHistory()
+        for i in 0..<20 {
+            legacy.recordDirect(fingerprint: fp, latencyMs: i, at: t0.addingTimeInterval(Double(i)))
+        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        var reloaded = try decoder.decode(NodeMetricsHistory.self,
+                                          from: try encoder.encode(legacy))
+        XCTAssertEqual(reloaded.samples(for: fp).count, 20)   // 老 20 条平滑加载
+        // 继续累积到超过新容量：老样本先被挤，稳态停在 100
+        for i in 20..<(NodeMetricsHistory.capacity + 30) {
+            reloaded.recordDirect(fingerprint: fp, latencyMs: i, at: t0.addingTimeInterval(Double(i)))
+        }
+        XCTAssertEqual(reloaded.samples(for: fp).count, NodeMetricsHistory.capacity)
+        XCTAssertEqual(reloaded.samples(for: fp).last?.latencyMs, NodeMetricsHistory.capacity + 29)
     }
 
     func testFailureIsRecordedAsNilLatency() {

@@ -51,7 +51,7 @@ public final class AppState {
     /// 自定义规则的命中计数（近 30 天，规则页「命中 N 次 / 可考虑删除」数据源）。
     /// ⚠️ 同 domainHistory：独立文件落本地，**不进 Snapshot**、不上 iCloud。
     public private(set) var ruleHitStats = RuleHitStats()
-    /// 每节点环形测量历史（20 条/节点）—— NodeScorer 稳定性维度的数据源。key 用
+    /// 每节点环形测量历史（100 条/节点）—— NodeScorer 稳定性维度的数据源。key 用
     /// identityFingerprint（订阅刷新后 UUID 可能变、指纹稳定）。⚠️ 同 domainHistory：
     /// 独立文件落本地（`Self.nodeMetricsFile`），**不进 Snapshot**、不上 iCloud
     /// （测量值跨设备/网络不可比）。internal(set) 供单测直接灌历史。

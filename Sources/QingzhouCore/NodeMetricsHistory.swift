@@ -31,13 +31,16 @@ public struct NodeMetricSample: Codable, Sendable, Equatable {
 /// - key 用 `Node.identityFingerprint` 而不是 UUID —— 订阅刷新后 UUID 可能变，指纹稳定，
 ///   历史才能跨刷新延续；
 /// - 环形上限 `capacity` 条：足够算成功率/变异系数，体量可控
-///   （500 节点 × 20 条 × ~40B ≈ 400KB，全在主 App，不碰扩展 50MB 红线）；
+///   （500 节点 × 100 条 × ~48B ≈ 2.4MB，全在主 App，不碰扩展 50MB 红线）；
+///   20→100 是为「回放对比实验」攒足够长的测量序列（同一序列回放两套择优策略、
+///   统计提速/省流量/切换次数，见 docs/NODE-SCORING.md §4）；
 /// - 落盘为单个 JSON（`node-metrics.json`），本地瞬态：**不进 Persistence.Snapshot、
 ///   不上 iCloud** —— 测量结果跨设备/网络没有可比性，待遇同 domain-history。
 public struct NodeMetricsHistory: Codable, Sendable, Equatable {
 
-    /// 每节点最多保留的样本数。
-    public static let capacity = 20
+    /// 每节点最多保留的样本数。20→100：为回放对比实验（离线用同一测量序列回放
+    /// 两套择优策略）攒足够长的历史；老文件（≤20 条）解码后照常加载，累积到 100 才开始挤。
+    public static let capacity = 100
 
     /// 「同轮回填」窗口：经代理精选紧跟在全量直连测速之后（同一轮内串行实测，最多几分钟），
     /// 距最近直连样本 ≤ 该窗口的经代理结果并入**同一条**样本；更久远的（用户在详情页

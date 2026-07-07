@@ -997,6 +997,12 @@ public final class AppState {
     ///    把 share link 展开成完整 xray 配置 —— 主 App 因此不需要 link LibXray.xcframework，
     ///    启动不会被 85 MB Go runtime 拖慢。
     public func startTunnel() async {
+        // 截图 demo：模拟器没有 NE，真启动必失败弹错 → 只翻状态位维持「已连接」观感
+        if ScreenshotDemoMode.isActive {
+            isVPNRunning = true
+            tunnelError = nil
+            return
+        }
         guard let node = currentNode else {
             tunnelError = VPNTunnelManager.TunnelError.noCurrentNode.errorDescription
             isVPNRunning = false
@@ -1134,6 +1140,10 @@ public final class AppState {
     }
 
     public func stopTunnel() async {
+        if ScreenshotDemoMode.isActive {   // 截图 demo：同 startTunnel
+            isVPNRunning = false
+            return
+        }
         // ⚠️ 用户主动关 VPN：必须先关掉 On-Demand 并落盘，否则 On-Demand 的 connect 规则
         // 会在 stop() 之后立刻把隧道重连回来，用户永远关不掉。失败也继续 stop（尽力而为）。
         do {
@@ -1748,6 +1758,9 @@ public final class AppState {
 
     /// 启动后台调度：根据设置定期跑自动择优 + 订阅刷新；同时启动示例连接产线（直到真隧道接入）。
     public func startSchedulers() {
+        // 截图 demo 模式：一切后台调度短路（测速/择优会覆盖演示数据，adopt 会翻掉
+        // 伪造的连接态，iCloud 检查可能弹恢复框），见 ScreenshotDemoMode。
+        if ScreenshotDemoMode.isActive { return }
         stopSchedulers()
         #if os(macOS)
         // 「打开 App 自动连」监听器随 app 启动就位（之后由 settings 副作用保持同步）

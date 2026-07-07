@@ -38,6 +38,8 @@ public actor NetworkInfoService {
 
 extension AppState {
     public func refreshPublicIPInfo() async {
+        // 截图 demo：真实出口 IP 属于隐私，绝不能进 App Store 截图；演示值已注入
+        if ScreenshotDemoMode.isActive { return }
         let svc = NetworkInfoService(logger: logger)
         do {
             let info = try await svc.fetchPublicIPInfo()

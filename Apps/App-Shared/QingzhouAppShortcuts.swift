@@ -42,5 +42,13 @@ struct QingzhouAppShortcuts: AppShortcutsProvider {
             shortTitle: "关闭 VPN",
             systemImageName: "stop.fill"
         )
+        // 状态查询：对 Siri 说「轻舟连接状态」会念出已连接 / 未连接（GetVPNStatusIntent 带 ProvidesDialog）；
+        // 快捷指令里也能拿它的布尔返回值做条件分支。四个动作齐活（对齐 AutomationGuideView 的「四个动作」文案）。
+        AppShortcut(
+            intent: GetVPNStatusIntent(),
+            phrases: ["\(.applicationName)连接状态", "\(.applicationName)连上了吗"],
+            shortTitle: "VPN 状态",
+            systemImageName: "questionmark.circle"
+        )
     }
 }

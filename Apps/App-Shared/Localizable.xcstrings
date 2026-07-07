@@ -1401,6 +1401,17 @@
         }
       }
     },
+    "VPN 状态": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VPN Status"
+          }
+        }
+      }
+    },
     "关闭于 %@": {
       "extractionState": "manual",
       "localizations": {

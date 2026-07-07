@@ -66,6 +66,28 @@
           }
         }
       }
+    },
+    "${applicationName}连接状态" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "${applicationName} connection status"
+          }
+        }
+      }
+    },
+    "${applicationName}连上了吗" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Is ${applicationName} connected"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

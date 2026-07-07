@@ -171,4 +171,46 @@ final class SettingsMigrationTests: XCTestCase {
         """)
         XCTAssertEqual(s.scoringProfile, .balanced)
     }
+
+    // MARK: - autoConnectOnAppLaunch / autoConnectApps（S9 macOS「打开指定 App 自动连」）
+
+    /// 旧 JSON 没有这两个字段 → 默认关闭 + 空集合，解码不能崩。
+    func testDecodeWithoutAutoConnectDefaults() throws {
+        let s = try decode("{}")
+        XCTAssertFalse(s.autoConnectOnAppLaunch)
+        XCTAssertTrue(s.autoConnectApps.isEmpty)
+
+        let old = try decode("""
+        { "proxyMode": "global", "autoSelectTrigger": "off", "logLevel": "WARN" }
+        """)
+        XCTAssertFalse(old.autoConnectOnAppLaunch)
+        XCTAssertTrue(old.autoConnectApps.isEmpty)
+    }
+
+    func testAutoConnectDefaultsAreOffAndEmpty() {
+        XCTAssertFalse(Settings().autoConnectOnAppLaunch)
+        XCTAssertTrue(Settings().autoConnectApps.isEmpty)
+    }
+
+    /// 开关 + 触发 App 集合（Set<String>）编解码往返：设置页写入的值必须能落盘再读回。
+    func testAutoConnectRoundtrips() throws {
+        var s = Settings()
+        s.autoConnectOnAppLaunch = true
+        s.autoConnectApps = ["com.openai.chat", "com.tinyspeck.slackmacgap"]
+        let data = try JSONEncoder().encode(s)
+        let reloaded = try JSONDecoder().decode(Settings.self, from: data)
+        XCTAssertTrue(reloaded.autoConnectOnAppLaunch)
+        XCTAssertEqual(reloaded.autoConnectApps, ["com.openai.chat", "com.tinyspeck.slackmacgap"])
+    }
+
+    /// 开关开着但触发列表为空 —— syncAppLaunchWatcher 视其为「未启用」，此处只校验编解码不丢。
+    func testAutoConnectEnabledWithEmptyAppsRoundtrips() throws {
+        var s = Settings()
+        s.autoConnectOnAppLaunch = true
+        s.autoConnectApps = []
+        let data = try JSONEncoder().encode(s)
+        let reloaded = try JSONDecoder().decode(Settings.self, from: data)
+        XCTAssertTrue(reloaded.autoConnectOnAppLaunch)
+        XCTAssertTrue(reloaded.autoConnectApps.isEmpty)
+    }
 }

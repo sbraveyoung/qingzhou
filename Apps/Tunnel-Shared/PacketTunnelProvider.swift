@@ -448,23 +448,30 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             if n < 5 {
                 continue
             }
-            let proto: UInt32 =
-                (UInt32(buf[0]) << 24) |
-                (UInt32(buf[1]) << 16) |
-                (UInt32(buf[2]) << 8) |
-                 UInt32(buf[3])
-            let packet = Data(buf[4..<Int(n)])
-            self.byteCounters.withLock { $0.down += Int64(n - 4) }
-            self.captureFakeDNS(packet)
+            // ⚠️ 必须显式 autoreleasepool：本循环在 GCD 队列上永不返回，队列只在
+            // block 结束时才 drain 池 —— writePackets 每个包桥接出的 NSData/NSNumber
+            // 会全部滞留（实测 macOS 扩展 footprint 堆到 ≈ 会话总流量；iOS 同源代码
+            // 会顶穿 NE 50MB jetsam 线）。NE 长驻循环里凡碰 ObjC 桥接 API
+            //（packetFlow 读写）都要套这一层。
+            autoreleasepool {
+                let proto: UInt32 =
+                    (UInt32(buf[0]) << 24) |
+                    (UInt32(buf[1]) << 16) |
+                    (UInt32(buf[2]) << 8) |
+                     UInt32(buf[3])
+                let packet = Data(buf[4..<Int(n)])
+                self.byteCounters.withLock { $0.down += Int64(n - 4) }
+                self.captureFakeDNS(packet)
 
-            if !loggedFirstXrayPacket {
-                loggedFirstXrayPacket = true
-                os_log("✅ first Xray→Apple packet: total=%d proto=%d ip_first_byte=0x%02x",
-                       log: log, type: .default,
-                       Int32(n), proto, buf[4])
+                if !loggedFirstXrayPacket {
+                    loggedFirstXrayPacket = true
+                    os_log("✅ first Xray→Apple packet: total=%d proto=%d ip_first_byte=0x%02x",
+                           log: log, type: .default,
+                           Int32(n), proto, buf[4])
+                }
+
+                self.packetFlow.writePackets([packet], withProtocols: [NSNumber(value: proto)])
             }
-
-            self.packetFlow.writePackets([packet], withProtocols: [NSNumber(value: proto)])
         }
     }
 

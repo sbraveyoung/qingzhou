@@ -219,8 +219,10 @@ public final class AppState {
     /// 假 IP（198.18.x.x）也有真实 DNS 应答的 IP（rule 模式下 CN 域名走 AliDNS 拿真实 IP）。
     /// internal 供单测直接注入（backfillDomainNames 用例）。
     var fakeDNSMap: [String: String] = [:]
-    /// content filter 扩展提供的「源端口 → 来源 App bundle id」（仅 macOS）。
-    private var sourceAppMap: [String: String] = [:]
+    /// content filter 扩展提供的「源端口 → 来源 App」映射（仅 macOS 使用）。
+    /// 带时间戳的条目按「端口+时间窗」认领，端口复用不误标（SourceAppMap 注释有全景）。
+    /// internal 供单测直接注入（SourceAppBackfillTests）。
+    var sourceAppMap = SourceAppMap()
     #if os(macOS)
     /// 内容过滤扩展以 root 运行，App Group 文件与用户 App 不通，故通过 XPC 查询端口→App 映射。
     private let filterControl = FilterControlClient()
@@ -1864,7 +1866,7 @@ public final class AppState {
                 // content filter 扩展（root）经 XPC 提供端口→App 映射；没启用/连不上则保持上次的值。
                 let fetched = await filterControl.fetchPortMap()
                 if let fetched {
-                    sourceAppMap = fetched
+                    sourceAppMap = SourceAppMap(raw: fetched)
                 }
                 // 回填：连接常在 XPC map 就绪前就已 ingest（sourceApp=nil），每轮用最新 map
                 // 把已存在连接的来源 App 补上，否则只有「解析那一刻」端口在 map 里的才有标注。
@@ -1880,14 +1882,15 @@ public final class AppState {
     #if os(macOS)
     /// 用最新的「源端口 → 来源 App」映射，回填还没标注来源的**活跃**连接。
     /// content filter 的 map 常晚于连接 ingest 才就绪，只在解析那刻查一次会漏掉大批连接。
-    /// 只回填活跃的：已关闭连接的源端口可能早被系统回收给了别的 App，再回填就是误标
-    /// （见 FeatureFlags.sourceAppLabeling 注释第 2 条）。
-    private func backfillSourceApps() {
+    /// 两道防误标：只回填活跃连接（已关闭的源端口可能早被回收给别的 App）；
+    /// 带时间戳的条目还要过「flow 观测时刻 ≈ openedAt」的时间窗（SourceAppMap）。
+    /// internal 供单测直接驱动。
+    func backfillSourceApps() {
         guard !sourceAppMap.isEmpty else { return }
         for i in connectionTracker.connections.indices
         where connectionTracker.connections[i].sourceApp == nil && connectionTracker.connections[i].isActive {
             if let port = connectionTracker.connections[i].sourceAddress.split(separator: ":").last.map(String.init),
-               let bundleID = sourceAppMap[port] {
+               let bundleID = sourceAppMap.bundleID(forPort: port, openedAt: connectionTracker.connections[i].openedAt) {
                 connectionTracker.connections[i].sourceApp = bundleID
             }
         }
@@ -1962,9 +1965,11 @@ public final class AppState {
                 route: DomainAnalyzer.routeCategory(conn.route)
             )
             conn.matchedRule = resolution.ruleText
-            // 源端口 → 来源 App（macOS content filter 标注的 bundle id）
+            // 源端口 → 来源 App（macOS content filter 标注的 bundle id）。
+            // openedAt 就是本次 ingest 时刻，时间窗校验挡掉「map 里还留着上一个占用
+            // 该端口的 App」的陈旧条目。
             if let port = entry.sourceAddress.split(separator: ":").last.map(String.init),
-               let bundleID = sourceAppMap[port] {
+               let bundleID = sourceAppMap.bundleID(forPort: port, openedAt: conn.openedAt) {
                 conn.sourceApp = bundleID
             }
             // 同身份（源地址+目标+端口）重现 → 只刷新活跃时间，不重复插入。

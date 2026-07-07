@@ -22,8 +22,11 @@ settings:
     MARKETING_VERSION: "1.0"
     # TestFlight/App Store 每次上传 build 号必须唯一且递增（同一版本内）。build 1 因 iPad
     # 方向校验失败没传成，改用 2。注意：改了系统扩展代码后也要 +1。
-    # build 3 = fakedns 启动竞态 nil 防护(d0174fe) + autoreleasepool 内存修复(7e64e44)。
-    CURRENT_PROJECT_VERSION: "3"
+    # build 3 = fakedns 启动竞态 nil 防护(d0174fe) + autoreleasepool 内存修复(7e64e44)，
+    #           已归档上传 App Store（iOS 1.0(3)）。
+    # build 4 = 来源 App 标注关联键升级「端口+时间窗」——Filter-macOS 系统扩展代码变了，
+    #           不 bump 版本号 macOS 不会替换运行中的旧扩展（见该 target 注释的激活坑）。
+    CURRENT_PROJECT_VERSION: "4"
     # 调试期间用自动签名 + 你自己的 Personal Team
     CODE_SIGN_STYLE: Automatic
 

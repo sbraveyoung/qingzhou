@@ -10,13 +10,12 @@ enum FeatureFlags {
     /// 曾因三个问题搁置，现状与缓解：
     ///   1. 启用过滤前的老连接补不上 → 无解也无需解：归入「未知来源」分组，UI 明示语义
     ///      （「启用过滤前的连接 / 无法归属的系统流量」），不再假装能全量标注；
-    ///   2. 端口回收误标（老连接被误标成后来复用同端口的 App）→ 缓解：backfill 只回填
-    ///      **活跃**连接（已关闭的不再动；误标主要发生在关闭已久的行上）。摄入时的标注
-    ///      用的是 access log 刚出现的新鲜端口，误标窗口本就极小。彻底修法仍是换更稳的
-    ///      关联键（端口+建立时间），留作 TODO；
+    ///   2. 端口回收误标（老连接被误标成后来复用同端口的 App）→ 已修（2026-07-07）：
+    ///      关联键升级为**端口+时间窗**（扩展上报 flow 观测时刻，主 App 按
+    ///      |seenAt − openedAt| ≤ 15s 认领，见 SourceAppMap）；backfill 仍只回填
+    ///      **活跃**连接作第二道防线；
     ///   3. 需用户手动批准系统扩展，体验偏重 → 保持可选（opt-in）：设置 → macOS 集成里
     ///      一键启用 + 批准引导 toast；「应用」tab 空数据时给启用指引，不启用不打扰。
-    /// TODO(source-app-labeling): 关联键升级为 端口+时间窗，进一步消除复用误标。
     /// 细节见 memory: macos-content-filter-runs-as-root-xpc、
     /// macos-system-extension-activation-gotchas。
     static let sourceAppLabeling = true

@@ -42,7 +42,11 @@ final class FilterDataProvider: NEFilterDataProvider, NSXPCListenerDelegate, Fil
         if let socketFlow = flow as? NEFilterSocketFlow,
            let port = localPort(of: socketFlow),
            let bundleID = bundleID(fromAuditToken: flow.sourceAppAuditToken) {
-            portToApp.withLock { $0[port] = bundleID }
+            // 值 = "bundleID\t<unix秒>"：\t 后是观测时刻，主 App 按「端口+时间窗」认领，
+            // 端口被系统回收复用时老连接不再误标。解码侧在 QingzhouCore/SourceAppMap.swift，
+            // 两侧格式必须同步改；无 \t 的旧格式主 App 仍认（纯端口匹配）。
+            let value = "\(bundleID)\t\(Int(Date().timeIntervalSince1970))"
+            portToApp.withLock { $0[port] = value }
         }
         return .allow()                                       // 只观测，绝不阻断
     }

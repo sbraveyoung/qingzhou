@@ -22,7 +22,8 @@ settings:
     MARKETING_VERSION: "1.0"
     # TestFlight/App Store 每次上传 build 号必须唯一且递增（同一版本内）。build 1 因 iPad
     # 方向校验失败没传成，改用 2。注意：改了系统扩展代码后也要 +1。
-    CURRENT_PROJECT_VERSION: "2"
+    # build 3 = fakedns 启动竞态 nil 防护(d0174fe) + autoreleasepool 内存修复(7e64e44)。
+    CURRENT_PROJECT_VERSION: "3"
     # 调试期间用自动签名 + 你自己的 Personal Team
     CODE_SIGN_STYLE: Automatic
 

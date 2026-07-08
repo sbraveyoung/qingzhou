@@ -21,6 +21,9 @@ public struct HomeView: View {
     public var body: some View {
         ScrollView {
             VStack(spacing: 14) {
+                if FailoverBanner.shouldShow(state: state) {
+                    FailoverBanner(state: state)
+                }
                 vpnSwitchCard
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 280), spacing: 14)],

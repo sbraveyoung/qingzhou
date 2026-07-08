@@ -208,6 +208,13 @@ public struct SettingsView: View {
             Text("自动择优时，若几个节点延迟差不多，优先选倍率低的（更省流量）。倍率从节点名 / 订阅元数据识别，非 1 倍会在节点上标出（0.5x 绿、2x 橙）。")
                 .font(.caption2).foregroundStyle(.secondary)
 
+            // 节点故障提醒（健康触发的故障切换，opt-in，默认关）。受编译期总开关约束。
+            if FeatureFlags.autoFailoverAlert {
+                Toggle("节点故障提醒", isOn: state.setting(\.autoFailoverAlert))
+                Text("当前节点疑似故障（代理上行还在发、下行却没有回流）时发通知提醒你，首页显示一键「切换到最优节点」。开启后会请求通知权限。只提醒不自动切换，不影响正常上网。")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+
             Picker("测速探测目标", selection: proxiedTargetBinding) {
                 Text("自动（Cloudflare，最稳）").tag("")
                 ForEach(ConnectivityProbe.presets) { t in

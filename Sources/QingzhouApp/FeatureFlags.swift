@@ -19,4 +19,16 @@ enum FeatureFlags {
     /// 细节见 memory: macos-content-filter-runs-as-root-xpc、
     /// macos-system-extension-activation-gotchas。
     static let sourceAppLabeling = true
+
+    /// 健康触发的无感故障切换 —— 编译期总开关（运行时 kill-switch）。
+    ///
+    /// 这是「功能在本 build 里是否存在」的闸：为 `true` 时暴露设置里的「节点故障提醒」
+    /// 开关、允许连接页显示疑似故障横幅。真正的 **opt-in 默认关** 在
+    /// `Settings.autoFailoverAlert`（默认 false，用户开了才请求通知权限）。
+    ///
+    /// 为什么两层：FAILOVER.md 的保守 MVP 要「Settings（opt-in）+ FeatureFlags（kill-switch）」。
+    /// 现场若误报率过高，翻这里为 false 即可整功能下线（横幅、权限申请、设置项全消失），
+    /// 无需改隧道扩展。首版设 true 让功能可被真机验收；扩展侧检测是被动零成本，且未授权
+    /// 通知时扩展的 add 静默 no-op —— 关着这个开关的用户不会收到任何打扰。
+    static let autoFailoverAlert = true
 }

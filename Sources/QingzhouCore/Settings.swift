@@ -83,6 +83,10 @@ public struct Settings: Codable, Sendable {
     /// 显示灵动岛 / 锁屏实时活动（Live Activity）。默认开（仅 iOS 有效，macOS 忽略）。
     /// 关掉后连接期间不再起 Live Activity，已在显示的会立即结束。
     public var showLiveActivity: Bool
+    /// 节点故障提醒（健康触发的故障切换，保守 MVP）。**默认关（opt-in）**：开启后才
+    /// 请求通知权限，扩展检测到「当前节点疑似故障」时发通知 + 连接页显示红色横幅一键切。
+    /// 首版只检测 + 告警，不自动切数据面。受 FeatureFlags.autoFailoverAlert 编译期总开关约束。
+    public var autoFailoverAlert: Bool
 
     public init(
         proxyMode: ProxyMode = .rule,
@@ -107,7 +111,8 @@ public struct Settings: Codable, Sendable {
         iCloudSyncEnabled: Bool = true,
         autoStopSeconds: TimeInterval = 0,
         ignoredUpdateVersion: String = "",
-        showLiveActivity: Bool = true
+        showLiveActivity: Bool = true,
+        autoFailoverAlert: Bool = false
     ) {
         self.proxyMode = proxyMode
         self.autoSelectTrigger = autoSelectTrigger
@@ -132,6 +137,7 @@ public struct Settings: Codable, Sendable {
         self.autoStopSeconds = autoStopSeconds
         self.ignoredUpdateVersion = ignoredUpdateVersion
         self.showLiveActivity = showLiveActivity
+        self.autoFailoverAlert = autoFailoverAlert
     }
 
     /// 旧版没有这些 interval 字段；解码时给个默认值。
@@ -151,6 +157,7 @@ public struct Settings: Codable, Sendable {
         case autoStopSeconds
         case ignoredUpdateVersion
         case showLiveActivity
+        case autoFailoverAlert
     }
 
     public init(from decoder: Decoder) throws {
@@ -183,5 +190,7 @@ public struct Settings: Codable, Sendable {
         self.autoStopSeconds = try c.decodeIfPresent(TimeInterval.self, forKey: .autoStopSeconds) ?? 0
         self.ignoredUpdateVersion = try c.decodeIfPresent(String.self, forKey: .ignoredUpdateVersion) ?? ""
         self.showLiveActivity = try c.decodeIfPresent(Bool.self, forKey: .showLiveActivity) ?? true
+        // 旧持久化数据没有此 key → 默认关（opt-in）
+        self.autoFailoverAlert = try c.decodeIfPresent(Bool.self, forKey: .autoFailoverAlert) ?? false
     }
 }

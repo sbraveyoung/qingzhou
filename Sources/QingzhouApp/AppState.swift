@@ -147,6 +147,15 @@ public final class AppState {
     /// 「浏览器可能在用 DoH」提示被用户点掉（连接页/域名分析共用）。
     /// 只在内存 —— 本会话不再弹，下次启动条件仍满足会再提示。
     public var dohNoticeDismissed = false
+    /// 当前「节点疑似故障」信号（扩展经 App Group 写、主 App 每秒读，见 syncNodeHealth）。
+    /// 非 nil 且特性开时，首页显示红色横幅 + 一键切。仅在特性开 + opt-in + 信号新鲜时置位。
+    public internal(set) var nodeHealthSuspect: NodeHealthSignal?
+    /// 通知权限只申请一次的进程内去重标记（用户开「节点故障提醒」时触发）。
+    var didRequestFailoverAuth = false
+    /// UNUserNotificationCenter delegate 只挂一次。
+    var didWireNotificationDelegate = false
+    /// 故障提醒通知的点击回调 delegate（NSObject，须由 AppState 强持有 —— center.delegate 是 weak）。
+    var failoverNotificationDelegate: AnyObject?
     /// iCloud vault 同步状态（设置页展示）。
     public internal(set) var cloudSyncStatus: CloudSyncStatus = .unknown
     /// 待确认的恢复候选（启动检查发现云端更新 / 用户从版本列表选了一份）。非 nil 时 UI 弹
@@ -413,6 +422,12 @@ public final class AppState {
         L10n.setLanguage(settings.language)
         // 「显示实时活动」开关变更即时生效：关掉立即结束在显示的活动，打开且在连则起。
         syncLiveActivity()
+        // 「节点故障提醒」打开时才申请通知权限（opt-in）；关掉立即收起横幅。
+        if FeatureFlags.autoFailoverAlert, settings.autoFailoverAlert {
+            requestFailoverNotificationAuthorizationIfNeeded()
+        } else if !settings.autoFailoverAlert, nodeHealthSuspect != nil {
+            nodeHealthSuspect = nil
+        }
         #if os(macOS)
         syncAppLaunchWatcher()
         #endif
@@ -2002,6 +2017,7 @@ public final class AppState {
         // 伪造的连接态，iCloud 检查可能弹恢复框），见 ScreenshotDemoMode。
         if ScreenshotDemoMode.isActive { return }
         stopSchedulers()
+        wireFailoverNotificationDelegate()   // 故障提醒：挂通知点击回调（幂等）
         #if os(macOS)
         // 「打开 App 自动连」监听器随 app 启动就位（之后由 settings 副作用保持同步）
         syncAppLaunchWatcher()
@@ -2404,6 +2420,7 @@ public final class AppState {
             syncAutoStopState()   // 定时关闭：刷新倒计时 + 识别「扩展已按定时自停」
             syncTunnelMemory()    // 扩展内存观测：读快照 + 新增告警转写进主 App 日志
             syncLiveActivity()    // 灵动岛/锁屏实时活动：每秒推进速率 + phase（主 App 前台时）
+            syncNodeHealth()      // 节点健康：读扩展写的 suspect 信号 → 驱动故障提醒横幅
             // "traffic-stats" 必须与 XrayCore.TunnelAppGroup.trafficStatsName 一致（两模块互不依赖）
             if let stats = AppGroupStorage.read(TrafficStats.self, from: "traffic-stats"),
                abs(stats.sampledAt.timeIntervalSinceNow) <= 3 {   // 只接受新鲜样本，避免旧文件

@@ -154,6 +154,24 @@ public enum TunnelAppGroup {
         return try? String(contentsOf: url, encoding: .utf8)
     }
 
+    // MARK: - 节点健康信号（Extension 写、主 App 读）—— 故障切换的告警触发源
+
+    /// 主 App 侧用 AppGroupStorage.read(NodeHealthSignal.self, from: "node-health") 同名读取。
+    public static let nodeHealthName = "node-health"
+
+    private static var nodeHealthURL: URL? {
+        containerURL?.appendingPathComponent(nodeHealthName).appendingPathExtension("json")
+    }
+
+    /// Extension 调：把节点健康信号（NodeHealthSignal 已 encode 成 JSON 串，ISO8601 日期）
+    /// 写进共享容器。主 App 特性开时读它显示「疑似故障」横幅 + 一键切。失败静默 ——
+    /// 观测缺席绝不影响 VPN 本体。
+    @discardableResult
+    public static func writeNodeHealth(_ json: String) -> Bool {
+        guard let url = nodeHealthURL else { return false }
+        return (try? json.write(to: url, atomically: true, encoding: .utf8)) != nil
+    }
+
     // MARK: - FakeDNS 映射（Extension 写、主 App 读）
 
     /// 主 App 侧用 AppGroupStorage.read(from: "fakedns-map") 同名读取。

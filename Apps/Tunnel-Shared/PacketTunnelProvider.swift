@@ -24,6 +24,7 @@ import NetworkExtension
 import os
 import os.log
 import QingzhouCore
+import UserNotifications
 import XrayConfig
 import XrayCore
 
@@ -81,6 +82,23 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     /// 统计轮询节流：每 2 个 stats tick（≈2 秒）查一次 QueryStats，别每秒都 GET。
     private var statsTickCount = 0
 
+    // MARK: - 健康触发的故障切换（保守 MVP：检测 + 告警，首版**不自动切数据面**）
+
+    /// 判死纯逻辑（QingzhouCore）。**只在 statsQueue 上碰**（随 reportXrayOutboundStats 喂样本），
+    /// 无需加锁 —— 与 mem* 峰值同一线程纪律。切换后由 statsQueue 读到 needsBaselineReset 再重置。
+    private var healthDetector = NodeHealthDetector()
+    /// 每节点上次发通知时刻（冷却用）。**只在 statsQueue 上碰**。
+    private var lastHealthNotifiedAt: [String: Date] = [:]
+    /// 同一节点两条「疑似故障」通知的最小间隔（秒）。别刷屏。
+    private static let healthNotifyCooldown: TimeInterval = 300
+
+    /// 跨队列的健康控制位：switchNode / reconfigure 在别的线程改，statsQueue 读。
+    /// - isSwitching：切换窗口内所有信号会虚假触发（stop→start 计数跳变），硬 guard 跳过喂样本（F24）。
+    /// - needsBaselineReset：切换成功后置位，statsQueue 下个 tick 消费 → detector.resetBaseline()（F5/F7）。
+    /// - nodeName：当前节点名（健康信号 + 通知用），随 start/reconfigure/switch 更新。
+    private struct HealthControl { var isSwitching = false; var needsBaselineReset = false; var nodeName = "node" }
+    private let healthControl = OSAllocatedUnfairLock(initialState: HealthControl())
+
     /// 「经代理延迟」（pingNode）/「配置预检」（testNode）专用串行队列。
     /// - 串行 = 同一时刻至多一个短命 xray 实例在跑（NE 50MB 内存预算的硬要求）；
     /// - 独立队列 = ping 阻塞最长 timeout 秒，绝不能占 bridgeQueue（packet 拷贝）或
@@ -122,6 +140,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
         let nodeName = (providerConfig?["nodeName"] as? String) ?? "node"
+        // 健康判死器：记住当前节点名（信号 + 通知用）；首采样自会建 baseline + 起 grace。
+        healthControl.withLock { $0.nodeName = nodeName }
         let modeRaw = (providerConfig?["proxyMode"] as? String) ?? ProxyMode.global.rawValue
         let mode = ProxyMode(rawValue: modeRaw) ?? .global
         // 定时自动关闭（秒，0/缺省 = 不启用）。plist 里的数字取回来是 NSNumber。
@@ -606,6 +626,65 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         if let data = try? encoder.encode(stats), let json = String(data: data, encoding: .utf8) {
             TunnelAppGroup.writeXrayStats(json)
         }
+        // 健康触发的故障切换：喂 proxy per-outbound 计数进纯逻辑判死器。长驻循环里套
+        // autoreleasepool（NE 50MB 预算，别让 encode 的临时对象堆积到下一个 runloop）。
+        autoreleasepool { feedNodeHealth(proxy: stats.proxy, at: now) }
+    }
+
+    /// 把 proxy 累计计数喂进 NodeHealthDetector，确认 .suspect 时写 App Group 信号 + 发通知。
+    /// **statsQueue 上跑**（healthDetector / lastHealthNotifiedAt 的唯一访问线程）。
+    /// 首版**只检测 + 告警，绝不自动切数据面**（切换由主 App 用户一键触发）。
+    private func feedNodeHealth(proxy: XrayOutboundStats.Counter, at now: Date) {
+        // 读控制位 + 消费一次性的 baseline 重置请求（原子取回）。
+        let control = healthControl.withLock { c -> (switching: Bool, reset: Bool, name: String) in
+            let snap = (c.isSwitching, c.needsBaselineReset, c.nodeName)
+            if c.needsBaselineReset { c.needsBaselineReset = false }
+            return snap
+        }
+        // 硬 guard：切换窗口内不喂（mid-switch stop→start 会让所有信号虚假触发，F24）。
+        if control.switching { return }
+        if control.reset { healthDetector.resetBaseline() }
+
+        let state = healthDetector.ingest(
+            proxyUplinkTotal: proxy.uplinkBytes,
+            proxyDownlinkTotal: proxy.downlinkBytes,
+            at: now
+        )
+
+        // 每 tick 都写当前状态（既是 suspect 触发源，也是 healthy 心跳 —— 让主 App 横幅
+        // 在切换 / 恢复后能自动收起，靠信号新鲜度而非猜测）。
+        let signal = NodeHealthSignal(state, nodeName: control.name, at: now)
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(signal), let json = String(data: data, encoding: .utf8) {
+            TunnelAppGroup.writeNodeHealth(json)
+        }
+
+        if state == .suspect {
+            os_log("node health → SUSPECT (node=%{public}@): proxy uplink 在涨、downlink 持平",
+                   log: log, type: .error, control.name)
+            sendHealthNotification(nodeName: control.name, at: now)
+        }
+    }
+
+    /// 「疑似故障」本地通知（带 5 分钟/节点冷却）。固定 identifier → 同一时刻只留一条。
+    /// 权限由主 App 在用户 opt-in 故障提醒时才申请；未授权时 add 静默 no-op（= 天然的开关）。
+    /// 首版通知文案为中文（扩展 target 无 strings catalog）——可操作的横幅/按钮在主 App 已四语。
+    private func sendHealthNotification(nodeName: String, at now: Date) {
+        if let last = lastHealthNotifiedAt[nodeName], now.timeIntervalSince(last) < Self.healthNotifyCooldown {
+            return
+        }
+        lastHealthNotifiedAt[nodeName] = now
+        let content = UNMutableNotificationContent()
+        content.title = "轻舟"
+        content.body = "当前节点疑似故障，点此切换"
+        content.sound = .default
+        content.userInfo = ["type": "nodeHealthSuspect", "nodeName": nodeName]
+        let req = UNNotificationRequest(
+            identifier: "com.sbraveyoung.qingzhou.nodeHealth",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 
     /// 内存采样 + 上报（statsQueue 上跑）。
@@ -705,6 +784,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                              reply: @escaping (Error?) -> Void) {
         os_log("reconfigure → node=%{public}@ mode=%{public}@ userRules=%d",
                log: log, type: .default, nodeName, mode.rawValue, userRules.count)
+        // 健康判死器：进入切换窗口，硬 guard 暂停喂样本（stop→start 计数跳变会虚假触发，F24）。
+        healthControl.withLock { $0.isSwitching = true }
         // 重配也重新解析 geo：可能刚下载完完整版（下载成功触发的热切换就是走这条链路的全量重启，
         // 但保留原地重配路径的正确性 —— 一旦重新启用不至于用错数据）。
         let geo = resolveGeoData()
@@ -725,12 +806,22 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         } catch {
             os_log("reconfigure: build config failed, keep old xray: %{public}@",
                    log: log, type: .error, error.localizedDescription)
+            // 构建失败：旧 xray 照跑，退出切换窗口（baseline 不动，继续按旧节点判死）。
+            healthControl.withLock { $0.isSwitching = false }
             reply(error)   // 旧 xray 照跑，网络不受影响
             return
         }
         _ = XrayCore.stop()
         tearDownBridge()
-        bringUpXray(configJSON: xrayJSON, completionHandler: reply)
+        bringUpXray(configJSON: xrayJSON) { [weak self] error in
+            // 切换完成：退出窗口 + 请求重建 baseline（新节点从头判，含 grace），更新节点名。
+            self?.healthControl.withLock { c in
+                c.isSwitching = false
+                c.needsBaselineReset = true
+                c.nodeName = nodeName
+            }
+            reply(error)
+        }
     }
 
     /// 原地换节点：不动 TUN / 桥 / xray 实例本身，只把 "proxy" outbound handler
@@ -741,6 +832,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                             reply: @escaping (Error?) -> Void) {
         os_log("switchNode → node=%{public}@ (in-place, tunnel kept alive)",
                log: log, type: .default, nodeName)
+        // 健康判死器：进入切换窗口，硬 guard 暂停喂样本（F24）。
+        healthControl.withLock { $0.isSwitching = true }
         do {
             let outboundsJSON = try resolveOutboundsJSON(nodeJSON: nodeJSON, shareLink: shareLink)
             guard let data = outboundsJSON.data(using: .utf8),
@@ -757,10 +850,18 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 encoding: .utf8) ?? "{}"
             try XrayCore.switchOutbound(outboundJSON: outboundJSON)
             os_log("switchNode done: proxy outbound now %{public}@", log: log, type: .default, nodeName)
+            // 切换完成：退出窗口 + 请求重建 baseline（新节点从头判，含 grace），更新节点名。
+            healthControl.withLock { c in
+                c.isSwitching = false
+                c.needsBaselineReset = true
+                c.nodeName = nodeName
+            }
             reply(nil)
         } catch {
             os_log("switchNode failed (%{public}@) — app will fall back to full restart",
                    log: log, type: .error, error.localizedDescription)
+            // 切换失败：退出窗口（主 App 会回退到全量重启，那条路径会带 needsBaselineReset）。
+            healthControl.withLock { $0.isSwitching = false }
             reply(error)
         }
     }

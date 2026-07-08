@@ -1,6 +1,62 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "当前节点疑似故障": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Current node may be down" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "現在のノードに障害の疑い" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "目前節點疑似故障" } }
+      }
+    },
+    "代理上行还在发、下行却没有回流。可一键切换到最优健康节点。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The proxy is still sending but nothing is coming back. Switch to the best healthy node in one tap." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "プロキシは送信を続けているのに、受信がありません。ワンタップで最適な正常ノードに切り替えできます。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "代理上行還在發、下行卻沒有回流。可一鍵切換到最優健康節點。" } }
+      }
+    },
+    "切换到最优节点": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Switch to best node" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "最適なノードに切り替え" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "切換到最優節點" } }
+      }
+    },
+    "节点故障提醒": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Node failure alerts" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "ノード障害の通知" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "節點故障提醒" } }
+      }
+    },
+    "当前节点疑似故障（代理上行还在发、下行却没有回流）时发通知提醒你，首页显示一键「切换到最优节点」。开启后会请求通知权限。只提醒不自动切换，不影响正常上网。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "When the current node appears to be down (the proxy is still sending but nothing comes back), you get a notification and a one-tap 'Switch to best node' banner on the home screen. Turning this on requests notification permission. It only alerts — it never switches automatically — and doesn't affect normal browsing." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "現在のノードに障害の疑い（プロキシは送信中なのに受信がない）があるとき、通知でお知らせし、ホーム画面にワンタップの「最適なノードに切り替え」バナーを表示します。オンにすると通知の許可を求めます。通知するだけで自動切り替えはせず、通常の通信には影響しません。" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "目前節點疑似故障（代理上行還在發、下行卻沒有回流）時發通知提醒你，首頁顯示一鍵「切換到最優節點」。開啟後會請求通知權限。只提醒不自動切換，不影響正常上網。" } }
+      }
+    },
+    "暂无可切换的健康节点，机场可能整体不可用": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No healthy node to switch to — the provider may be entirely unavailable" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "切り替え可能な正常ノードがありません。プロバイダー全体が利用できない可能性があります" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "暫無可切換的健康節點，機場可能整體不可用" } }
+      }
+    },
+    "已切换到 %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Switched to %@" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@ に切り替えました" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "已切換到 %@" } }
+      }
+    },
     "%@ · 峰值 %@": {
       "extractionState": "manual",
       "localizations": {

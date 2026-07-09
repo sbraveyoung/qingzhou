@@ -212,6 +212,14 @@ public final class AppState {
     public enum ReapplyScope { case nodeOnly, full }
     /// 热切换进行中又来一次请求时的合并暂存：nil = 无 pending；full 吞并 nodeOnly。
     private var pendingReapplyScope: ReapplyScope?
+    /// QUIC 策略 auto 下，被 HTTP/3 实测判定「QUIC 走不通」的节点指纹集合。**本会话内存缓存**：
+    /// 不落盘、不上云（换会话重探一次可接受，避免把一次网络抖动永久钉死）。key 用 identityFingerprint
+    /// （订阅刷新后 UUID 可能变、指纹稳定）。命中 → auto 下该 hysteria2 节点也挡 QUIC。见 docs/QUIC.md。
+    private var quicKnownBrokenNodes: Set<String> = []
+    /// 当前**正在跑的隧道**其 routing 是按哪个 blockQUIC 有效值构建的。用于判断原地换出口
+    /// （nodeOnly，SwitchOutbound 只换 outbound、不重建 routing）是否会留下过期的 QUIC 路由 ——
+    /// 新节点有效阻断值与它不一致时必须升级为全量重启重建 routing。startTunnel / 全量重配时更新。
+    private var runningBlockQUIC: Bool = true
     /// access log 文件已读到的字节位置（增量读，不重复解析）。
     private var accessLogOffset: UInt64 = 0
     /// matchedRule 回填器（内含 host→规则 缓存）。规则集 / proxyMode 变化时按 key 重建。
@@ -352,6 +360,34 @@ public final class AppState {
     /// VPN 正在运行时自动重启隧道，让新模式立即生效——对称于切换节点的热切换，用户不用手动关开。
     public var proxyModeBinding: Binding<ProxyMode> {
         Binding(get: { self.settings.proxyMode }, set: { self.setProxyMode($0) })
+    }
+
+    /// QUIC 策略专用 Binding（三档 Picker 用）。改值 + 持久化；VPN 在跑时热重启隧道，
+    /// 让新策略算出的有效 blockQUIC 立即生效（全量重配会重建 routing）。对称于代理模式切换。
+    public var quicPolicyBinding: Binding<QUICPolicy> {
+        Binding(get: { self.settings.quicPolicy }, set: { self.setQUICPolicy($0) })
+    }
+
+    /// 切换 QUIC 策略。改值 + 副作用 + 持久化；VPN 在跑则热重启隧道使新策略即时生效。
+    public func setQUICPolicy(_ policy: QUICPolicy) {
+        guard settings.quicPolicy != policy else { return }
+        settings.quicPolicy = policy
+        applySettingsSideEffects()
+        persist()
+        logger.info("QUIC policy → \(policy.rawValue)", category: "app")
+        // VPN 在跑才需要重启（reapply 内部 guard 会在没跑时直接返回）。全量重配重建 routing，
+        // 且成功后走 verifyTunnelConnectivity → 触发 auto+hysteria2 的 h3 实测。
+        Task { await reapplyRunningTunnel() }
+    }
+
+    /// 当前 QUIC 策略下、给定节点的**有效阻断值**（传给扩展 / compose 的 blockQUIC bool）。
+    /// auto：hysteria2 未标记坏 → 放行；标记坏或其余协议 → 挡。见 QUICPolicyResolver / docs/QUIC.md。
+    func effectiveBlockQUIC(for node: Node) -> Bool {
+        QUICPolicyResolver.shouldBlock(
+            policy: settings.quicPolicy,
+            protocolType: node.protocolType,
+            knownBrokenOnThisNode: quicKnownBrokenNodes.contains(node.identityFingerprint)
+        )
     }
 
     /// 切换代理模式。改值 + 副作用 + 持久化；若 VPN 在跑则热重启隧道使新模式即时生效。
@@ -1129,6 +1165,8 @@ public final class AppState {
             return
         }
 
+        // QUIC 三档 → 当前节点有效阻断值（auto 下 hysteria2 放行、其余挡）。routing 按它构建。
+        let effBlockQUIC = effectiveBlockQUIC(for: node)
         do {
             // description 带节点名，方便用户在「系统设置 → 网络 → VPN」里识别
             try await tunnelManager.configure(
@@ -1137,10 +1175,11 @@ public final class AppState {
                 shareLink: shareLink,
                 rules: effectiveUserRules,
                 autoStopSeconds: settings.autoStopSeconds,
-                blockQUIC: settings.blockQUIC,
+                blockQUIC: effBlockQUIC,
                 description: L("轻舟 · \(node.name)")
             )
             try await tunnelManager.start()
+            runningBlockQUIC = effBlockQUIC   // 记录本会话 routing 所用的有效阻断值
             isVPNRunning = true
             lastTunnelStartAt = Date()   // 之后只认不早于此刻的会话标记（滤掉上次会话残留）
             tunnelError = nil
@@ -1209,6 +1248,9 @@ public final class AppState {
     /// 直连模式不探测：没有代理链路，墙内访问 google 本来就通不了，会误报。
     private func verifyTunnelConnectivity() {
         guard settings.proxyMode != .direct else { return }
+        // 并行跑一次 QUIC/HTTP3 实测（仅 auto + hysteria2 + 当前放行 QUIC 时）——
+        // 与下面的通用连通性哨兵各自独立。
+        probeQUICForCurrentNodeIfNeeded()
         let preferred = settings.proxiedTestTarget
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(2))   // 给 xray 出站起身时间，降低刚建链的误报
@@ -1252,6 +1294,89 @@ public final class AppState {
                 return true
             }
             return false
+        }
+    }
+
+    // MARK: - QUIC / HTTP3 实测探测（auto 策略下 hysteria2 节点的非对称修正）
+
+    /// 连接 / 换节点后，对**放行着 QUIC 的 hysteria2 节点**实测 HTTP/3 是否真能跑。
+    /// 跑不通（回退 h2/h1 或失败）说明该节点没转发 UDP → 标记该节点 QUIC 实测坏 +
+    /// 触发一次整实例重配（reapplyRunningTunnel(.full)，让 routing 带上 blockQUIC=true）。
+    ///
+    /// 触发条件（三者全真才探）：quicPolicy==auto、当前节点是 hysteria2、当前**放行**着 QUIC
+    /// （未标记坏）。其余情况（强制档 / TCP 基节点 / 已挡）都无需探测。见 docs/QUIC.md。
+    private func probeQUICForCurrentNodeIfNeeded() {
+        guard settings.quicPolicy == .auto,
+              let node = currentNode,
+              node.protocolType == .hysteria2,
+              !quicKnownBrokenNodes.contains(node.identityFingerprint) else { return }
+        let fingerprint = node.identityFingerprint
+        let nodeName = node.name
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))   // 给 xray 出站起身时间，降低刚建链的误判
+            // 探测期间用户可能换了节点 / 关了 VPN / 切了策略 —— 再确认一次前置条件仍成立。
+            guard let self, self.isVPNRunning, !self.isSwitchingTunnel,
+                  self.settings.quicPolicy == .auto,
+                  self.currentNode?.identityFingerprint == fingerprint,
+                  !self.quicKnownBrokenNodes.contains(fingerprint) else { return }
+            let proto = await Self.probeHTTP3NegotiatedProtocol()
+            guard QUICProbeDecision.shouldMarkBroken(networkProtocolName: proto) else {
+                self.logger.info("QUIC h3 probe OK on \(nodeName) (proto=\(proto ?? "nil")) — keeping QUIC allowed", category: "tunnel")
+                return
+            }
+            // 判坏。落地前再确认仍是同一节点、仍在跑（避免与用户操作竞态）。
+            guard self.isVPNRunning, !self.isSwitchingTunnel,
+                  self.currentNode?.identityFingerprint == fingerprint else { return }
+            self.quicKnownBrokenNodes.insert(fingerprint)
+            self.logger.warn("QUIC h3 probe failed (proto=\(proto ?? "nil")) on \(nodeName) — blocking QUIC + reconfigure", category: "tunnel")
+            // 整实例重配：routing 会带上 blockQUIC=true（此刻 effectiveBlockQUIC 已返回 true）。
+            await self.reapplyRunningTunnel(scope: .full)
+        }
+    }
+
+    /// 用 URLSession 对已知 HTTP/3 端点发轻请求，返回**实际协商到的传输协议名**
+    /// （h3 / h2 / http/1.1 / nil）。靠 `URLRequest.assumesHTTP3Capable`（iOS15+/macOS12+，
+    /// 目标系统均可用）允许首个请求直接尝试 h3（无需先收 Alt-Svc），再从
+    /// `URLSessionTaskMetrics.transactionMetrics.last?.networkProtocolName` 读回真正用上的协议。
+    /// 多目标：任一目标协商到 h3 即证明该节点能转发 UDP → 立即返回 "h3"；都没 h3 才回退协议 / nil。
+    private static func probeHTTP3NegotiatedProtocol() async -> String? {
+        let targets = ["https://cloudflare-quic.com/", "https://www.google.com/generate_204"]
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false
+        config.timeoutIntervalForRequest = 8
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        let session = URLSession(configuration: config)
+        defer { session.finishTasksAndInvalidate() }
+        var best: String?
+        for urlString in targets {
+            guard let url = URL(string: urlString) else { continue }
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.assumesHTTP3Capable = true   // 允许无 Alt-Svc 先验就尝试 h3
+            let collector = HTTP3ProtocolCollector()
+            _ = try? await session.data(for: request, delegate: collector)
+            if let proto = collector.protocolName() {
+                if proto == "h3" { return "h3" }   // 任一目标走上 h3 → UDP 转发可用，收工
+                best = best ?? proto               // 记下首个非 h3 回退协议
+            }
+        }
+        return best
+    }
+
+    /// URLSessionTaskDelegate：捕获最后一段 transaction 协商到的传输协议名。
+    /// `didFinishCollecting` 在任务完成前于 delegate 队列回调，与 async data 的 await 之间用
+    /// NSLock 护栏，`@unchecked Sendable` 手动保证线程安全（满足 Swift 6 严格并发）。
+    private final class HTTP3ProtocolCollector: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _protocolName: String?
+        func protocolName() -> String? {
+            lock.lock(); defer { lock.unlock() }
+            return _protocolName
+        }
+        func urlSession(_ session: URLSession, task: URLSessionTask,
+                        didFinishCollecting metrics: URLSessionTaskMetrics) {
+            lock.lock(); defer { lock.unlock() }
+            _protocolName = metrics.transactionMetrics.last?.networkProtocolName
         }
     }
 
@@ -1322,11 +1447,17 @@ public final class AppState {
             isSwitchingTunnel = false
             WidgetRefresher.reload()
         }
+        // 新节点在当前 QUIC 策略下的有效阻断值。
+        let effBlockQUIC = effectiveBlockQUIC(for: node)
         // 快路径：只换节点（mode / 规则没变）时先试扩展内原地换出口（libXray
         // SwitchOutbound 热替换 "proxy" handler）—— 隧道 / TUN / 路由 / DNS 全不动，
         // 零断流、系统 VPN 图标不闪。任何失败（xray 没在跑 / 节点构建失败 / 扩展
         // 超时）都回退到下面的全量重启，原安全网不变。
-        if scope == .nodeOnly {
+        //
+        // ⚠️ 但原地换出口**不重建 routing** —— 若新节点有效阻断值与当前隧道 routing 所用的
+        // （runningBlockQUIC）不一致（如 trojan[挡]→hysteria2[放行]，或反向），原地切会留下
+        // 过期的 QUIC 路由。此时降级为全量重启（下方路径重建 routing）。一致时才走零断流快路径。
+        if scope == .nodeOnly && effBlockQUIC == runningBlockQUIC {
             do {
                 // 先落盘新节点配置：扩展若之后被系统回收再由 On-Demand 拉起，用的是
                 // providerConfiguration —— 不落盘会复活成旧节点。saveToPreferences
@@ -1338,7 +1469,7 @@ public final class AppState {
                     rules: effectiveUserRules,
                     // 原地切换 = 同一会话延续：定时倒计时不重置（扩展侧计时器没动）
                     autoStopSeconds: settings.autoStopSeconds,
-                    blockQUIC: settings.blockQUIC,
+                    blockQUIC: effBlockQUIC,   // == runningBlockQUIC，routing 无需变
                     description: L("轻舟 · \(node.name)")
                 )
                 try await tunnelManager.switchNodeInPlace(node: node, shareLink: shareLink)
@@ -1377,7 +1508,7 @@ public final class AppState {
                 // 热切换 = 全量重启 = 新会话：定时按设置的时长**重新计时**（切节点/模式后
                 // 从头再数）。不带旧剩余时间过去 —— 语义简单、扩展侧无需额外状态。
                 autoStopSeconds: settings.autoStopSeconds,
-                blockQUIC: settings.blockQUIC,
+                blockQUIC: effBlockQUIC,   // 全量重启会重建 routing，带上新有效阻断值
                 description: L("轻舟 · \(node.name)")
             )
             // 切换窗口先关 On-Demand 再 stop：connect 规则匹配所有流量，stop 后系统
@@ -1395,6 +1526,7 @@ public final class AppState {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             try await tunnelManager.start()
+            runningBlockQUIC = effBlockQUIC   // 新会话 routing 已按新有效阻断值重建
             lastTunnelStartAt = Date()   // 新会话：时长从新会话标记重新计（滤掉旧标记残留）
             // start() 只等"启动请求提交成功"，不等隧道真连上 —— 到这里就收窗口的话，
             // 开关会在 xray 还没就绪时就滑回"开"（规则模式加载 geo 那几秒尤其明显）。

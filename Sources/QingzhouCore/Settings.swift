@@ -87,11 +87,13 @@ public struct Settings: Codable, Sendable {
     /// 请求通知权限，扩展检测到「当前节点疑似故障」时发通知 + 连接页显示红色横幅一键切。
     /// 首版只检测 + 告警，不自动切数据面。受 FeatureFlags.autoFailoverAlert 编译期总开关约束。
     public var autoFailoverAlert: Bool
-    /// 阻断 QUIC（reject UDP 443）。**默认开**：QUIC 经代理节点普遍走不通（真机确认
-    /// YouTube 等 QUIC 重度站点在规则/全局模式下打不开，浏览器关掉 QUIC 即恢复）。
-    /// 开启后在 rule/global 路由里对 UDP 443 一律 reject → 浏览器自动回退 TCP 443 → 走代理正常。
-    /// 代价：失去 QUIC 传输优化（经代理本就无意义）。见 docs/QUIC.md。
-    public var blockQUIC: Bool
+    /// QUIC（UDP 443 / HTTP/3）阻断策略：**智能三档**，取代 build 10 的 `blockQUIC` 单开关。
+    /// - auto（默认）：hysteria2 节点先放行并连接后实测 h3，走不通再挡；其余协议直接挡 QUIC 走 TCP。
+    /// - alwaysBlock：所有节点恒挡 UDP 443 → 强制回退 TCP。
+    /// - neverBlock：所有节点恒放行 QUIC。
+    /// 有效阻断值由 `QUICPolicyResolver.shouldBlock` 按当前节点协议 + 实测坏标记算出，
+    /// 再经 providerConfiguration 的 `blockQUIC` bool 传给扩展。见 docs/QUIC.md。
+    public var quicPolicy: QUICPolicy
 
     public init(
         proxyMode: ProxyMode = .rule,
@@ -118,7 +120,7 @@ public struct Settings: Codable, Sendable {
         ignoredUpdateVersion: String = "",
         showLiveActivity: Bool = true,
         autoFailoverAlert: Bool = false,
-        blockQUIC: Bool = true
+        quicPolicy: QUICPolicy = .auto
     ) {
         self.proxyMode = proxyMode
         self.autoSelectTrigger = autoSelectTrigger
@@ -144,7 +146,7 @@ public struct Settings: Codable, Sendable {
         self.ignoredUpdateVersion = ignoredUpdateVersion
         self.showLiveActivity = showLiveActivity
         self.autoFailoverAlert = autoFailoverAlert
-        self.blockQUIC = blockQUIC
+        self.quicPolicy = quicPolicy
     }
 
     /// 旧版没有这些 interval 字段；解码时给个默认值。
@@ -165,7 +167,7 @@ public struct Settings: Codable, Sendable {
         case ignoredUpdateVersion
         case showLiveActivity
         case autoFailoverAlert
-        case blockQUIC
+        case quicPolicy
     }
 
     public init(from decoder: Decoder) throws {
@@ -200,7 +202,8 @@ public struct Settings: Codable, Sendable {
         self.showLiveActivity = try c.decodeIfPresent(Bool.self, forKey: .showLiveActivity) ?? true
         // 旧持久化数据没有此 key → 默认关（opt-in）
         self.autoFailoverAlert = try c.decodeIfPresent(Bool.self, forKey: .autoFailoverAlert) ?? false
-        // 旧持久化数据 / 缺字段没有此 key → 默认开（QUIC 经代理不通，默认阻断强制回退 TCP）
-        self.blockQUIC = try c.decodeIfPresent(Bool.self, forKey: .blockQUIC) ?? true
+        // 缺 key（旧持久化数据 / build 10 的 blockQUIC bool 字段被忽略）或未知档位值 →
+        // 回落 .auto（智能默认：hysteria2 放行实测、其余挡）。try? 一并吞掉缺 key + 解码失败。
+        self.quicPolicy = (try? c.decode(QUICPolicy.self, forKey: .quicPolicy)) ?? .auto
     }
 }

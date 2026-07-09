@@ -146,8 +146,12 @@ public struct SettingsView: View {
             }
             Text("全程走虚拟网卡（TUN），整机流量自动经隧道转发，无需配置系统代理。")
                 .font(.caption2).foregroundStyle(.secondary)
-            Toggle("阻断 QUIC", isOn: state.setting(\.blockQUIC))
-            Text("改善 YouTube 等站点兼容性（默认开启）")
+            Picker("阻断 QUIC", selection: state.quicPolicyBinding) {
+                Text("自动").tag(QUICPolicy.auto)
+                Text("强制开启").tag(QUICPolicy.alwaysBlock)
+                Text("强制关闭").tag(QUICPolicy.neverBlock)
+            }
+            Text("自动：hysteria2 节点放行并实测，其余挡 QUIC 走 TCP")
                 .font(.caption2).foregroundStyle(.secondary)
             Picker("日志级别", selection: state.setting(\.logLevel)) {
                 Text("DEBUG").tag("DEBUG")

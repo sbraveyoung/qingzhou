@@ -17,6 +17,38 @@
         "zh-Hant": { "stringUnit": { "state": "translated", "value": "改善 YouTube 等網站相容性（預設開啟）" } }
       }
     },
+    "自动": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Automatic" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "自動" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自動" } }
+      }
+    },
+    "强制开启": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Always on" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "常に有効" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "強制開啟" } }
+      }
+    },
+    "强制关闭": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Always off" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "常に無効" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "強制關閉" } }
+      }
+    },
+    "自动：hysteria2 节点放行并实测，其余挡 QUIC 走 TCP": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Automatic: allow and test QUIC on hysteria2 nodes; block it on others to fall back to TCP" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "自動：hysteria2 ノードでは QUIC を許可して実測し、その他はブロックして TCP にフォールバックさせます" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "自動：hysteria2 節點放行並實測，其餘阻擋 QUIC 改走 TCP" } }
+      }
+    },
     "当前节点疑似故障": {
       "extractionState": "manual",
       "localizations": {

@@ -214,29 +214,43 @@ final class SettingsMigrationTests: XCTestCase {
         XCTAssertTrue(reloaded.autoConnectApps.isEmpty)
     }
 
-    // MARK: - blockQUIC（阻断 QUIC / UDP 443 强制回退 TCP，改善 YouTube 等站点兼容性）
+    // MARK: - quicPolicy（QUIC 三档策略，取代 build 10 的 blockQUIC bool）
 
-    /// 旧 JSON / 缺字段 → 默认 true（开启）。QUIC 经代理节点普遍不通（真机 YouTube 案），
-    /// 默认阻断强制浏览器回退 TCP 443 才能正常访问，所以缺省必须 true 而不是 false。
-    func testDecodeWithoutBlockQUICDefaultsToTrue() throws {
-        XCTAssertTrue(try decode("{}").blockQUIC)
+    /// 缺字段 → 默认 .auto（智能：hysteria2 放行实测、其余挡）。
+    func testDecodeWithoutQUICPolicyDefaultsToAuto() throws {
+        XCTAssertEqual(try decode("{}").quicPolicy, .auto)
         let old = try decode("""
         { "proxyMode": "global", "autoSelectTrigger": "off", "logLevel": "WARN" }
         """)
-        XCTAssertTrue(old.blockQUIC)
+        XCTAssertEqual(old.quicPolicy, .auto)
     }
 
-    func testBlockQUICDefaultIsTrue() {
-        XCTAssertTrue(Settings().blockQUIC)
+    /// build 10 的旧 `blockQUIC` bool 字段被解码忽略（不报错），quicPolicy 回落 .auto。
+    /// 迁移语义：build 10 只在内测机上，无正式用户，旧值直接丢弃。
+    func testLegacyBlockQUICFieldIgnored() throws {
+        for legacy in ["true", "false"] {
+            let s = try decode("{ \"blockQUIC\": \(legacy) }")
+            XCTAssertEqual(s.quicPolicy, .auto, "旧 blockQUIC=\(legacy) 应被忽略并回落 .auto")
+        }
     }
 
-    func testBlockQUICRoundtrips() throws {
-        for value in [true, false] {
+    /// 未知档位值（未来新增档 / 手改文件）→ 回落 .auto，不报废整个 Settings。
+    func testDecodeUnknownQUICPolicyFallsBackToAuto() throws {
+        let s = try decode("{ \"quicPolicy\": \"someFutureMode\" }")
+        XCTAssertEqual(s.quicPolicy, .auto)
+    }
+
+    func testQUICPolicyDefaultIsAuto() {
+        XCTAssertEqual(Settings().quicPolicy, .auto)
+    }
+
+    func testQUICPolicyRoundtrips() throws {
+        for value in QUICPolicy.allCases {
             var s = Settings()
-            s.blockQUIC = value
+            s.quicPolicy = value
             let data = try JSONEncoder().encode(s)
             let reloaded = try JSONDecoder().decode(Settings.self, from: data)
-            XCTAssertEqual(reloaded.blockQUIC, value)
+            XCTAssertEqual(reloaded.quicPolicy, value)
         }
     }
 }

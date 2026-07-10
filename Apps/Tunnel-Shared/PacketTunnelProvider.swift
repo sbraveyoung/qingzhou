@@ -675,15 +675,17 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
     /// 「疑似故障」本地通知（带 5 分钟/节点冷却）。固定 identifier → 同一时刻只留一条。
     /// 权限由主 App 在用户 opt-in 故障提醒时才申请；未授权时 add 静默 no-op（= 天然的开关）。
-    /// 首版通知文案为中文（扩展 target 无 strings catalog）——可操作的横幅/按钮在主 App 已四语。
+    /// 文案四语：String(localized:) 查 appex 自己的 Localizable.xcstrings（Tunnel-Shared/）。
+    /// 已知边界：扩展是独立进程，按**系统语言**解析 —— 用户在 App 内改语言而系统语言不同时，
+    /// 通知语言 = 系统语言（感知不到主 App 的语言设置，可接受）。见 docs/FAILOVER.md。
     private func sendHealthNotification(nodeName: String, at now: Date) {
         if let last = lastHealthNotifiedAt[nodeName], now.timeIntervalSince(last) < Self.healthNotifyCooldown {
             return
         }
         lastHealthNotifiedAt[nodeName] = now
         let content = UNMutableNotificationContent()
-        content.title = "轻舟"
-        content.body = "当前节点疑似故障，点此切换"
+        content.title = String(localized: "轻舟")
+        content.body = String(localized: "当前节点疑似故障，点此切换")
         content.sound = .default
         content.userInfo = ["type": "nodeHealthSuspect", "nodeName": nodeName]
         let req = UNNotificationRequest(

@@ -720,12 +720,15 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 let decoder = JSONDecoder()
                 decoder.dateDecodingStrategy = .iso8601
                 if let prev = try? decoder.decode(TunnelMemoryStats.self, from: data) {
-                    memAllTimePeak = prev.allTimePeakBytes
+                    // 读侧钳制：崩溃循环时代可能留下过物理上不可能的天文峰值（实测 8.4GB），
+                    // 照单全收会永久粘住 —— 超界视为损坏，丢弃后用本会话数据重建。
+                    memAllTimePeak = TunnelMemoryPeakGuard.sanitizedPersistedPeak(prev.allTimePeakBytes)
                 }
             }
         }
         if let fp = footprint {
-            memSessionPeak = max(memSessionPeak, fp)
+            // 写侧防护：单次采样超过可信上限（病理读数）不并入峰值，防坏样本再次落盘粘住。
+            memSessionPeak = TunnelMemoryPeakGuard.mergingPeak(memSessionPeak, sample: fp)
             memAllTimePeak = max(memAllTimePeak, memSessionPeak)
 
             // 接近上限预警（40MB，距 jetsam 线还剩 10MB）。带 4MB 迟滞：越线只记一次，

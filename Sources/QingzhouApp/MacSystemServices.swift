@@ -43,5 +43,22 @@ extension AppState {
             settings.launchAtLogin = loginActual
         }
     }
+
+    /// 「来源 App 标注」下线（`FeatureFlags.sourceAppLabeling=false`）后的一次性清理:启动时若
+    /// 检测到老用户仍启用着内容过滤,静默关掉 NEFilter,让扩展停止在后台过滤 —— disable 不需
+    /// 用户批准。system extension 的注册残留良性(不再工作),彻底移除让用户去系统设置。
+    /// flag 为 `true`(功能在线)时是 no-op,不打扰正常启用了功能的用户。
+    @MainActor
+    public func deactivateRetiredContentFilterIfNeeded() async {
+        guard !FeatureFlags.sourceAppLabeling else { return }
+        guard await ContentFilterManager.loadIsEnabled() else { return }
+        do {
+            try await ContentFilterManager.shared.disable()
+            logger.info("来源 App 标注已下线:关闭遗留的内容过滤 NEFilter", category: "filter")
+        } catch {
+            let ns = error as NSError
+            logger.error("关闭遗留内容过滤失败: \(ns.domain) #\(ns.code)", category: "filter")
+        }
+    }
 }
 #endif

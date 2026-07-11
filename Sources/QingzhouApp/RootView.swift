@@ -16,6 +16,10 @@ public struct RootView: View {
             .toastOverlay(state: state)
             // App Store 截图 demo（-qz-screenshot 启动参数才激活，正常启动不可达）
             .task { ScreenshotDemoMode.applyIfRequested(to: state) }
+            #if os(macOS)
+            // 「来源 App 标注」已下线：启动时静默关掉老用户遗留的内容过滤扩展（见 FeatureFlags.sourceAppLabeling）。
+            .task { await state.deactivateRetiredContentFilterIfNeeded() }
+            #endif
             // iCloud vault：云端备份更新（或新装机）时的恢复确认。挂在根上 —— 启动检查
             // 在任何页面都能弹；设置页的「立即恢复」也复用这里。
             .alert(

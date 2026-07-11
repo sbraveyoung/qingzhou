@@ -271,15 +271,20 @@ final class XrayConfigComposerTests: XCTestCase {
 
         // 第一条仍是 DNS 拦截（fakedns 的命脉）
         XCTAssertEqual(rules[0]["outboundTag"] as? String, "dns-out")
-        // 紧随其后是用户规则，保持传入顺序
-        XCTAssertEqual(rules[1]["domain"] as? [String], ["domain:example.com"])
-        XCTAssertEqual(rules[1]["outboundTag"] as? String, "reject")
-        XCTAssertEqual(rules[2]["ip"] as? [String], ["1.2.3.0/24"])
-        XCTAssertEqual(rules[2]["outboundTag"] as? String, "direct")
+        // 紧随其后是「公共 DNS 上游强制直连」内置基础设施规则（防 DNS 绕代理，docs/DNS.md）——
+        // 它先于用户规则（DNS 上游走对出站是分流的地基，不能被用户规则或 catch-all 抢走）。
+        XCTAssertEqual(rules[1]["outboundTag"] as? String, "direct")
+        XCTAssertTrue((rules[1]["ip"] as? [String])?.contains("8.8.8.8") ?? false,
+                      "index 1 应是公共 DNS 直连规则（含 8.8.8.8）")
+        // 再之后才是用户规则，保持传入顺序
+        XCTAssertEqual(rules[2]["domain"] as? [String], ["domain:example.com"])
+        XCTAssertEqual(rules[2]["outboundTag"] as? String, "reject")
+        XCTAssertEqual(rules[3]["ip"] as? [String], ["1.2.3.0/24"])
+        XCTAssertEqual(rules[3]["outboundTag"] as? String, "direct")
         // 内置规则在用户规则之后
         let privateIdx = rules.firstIndex { ($0["ip"] as? [String])?.contains("geoip:private") ?? false }
         XCTAssertNotNil(privateIdx)
-        XCTAssertGreaterThan(privateIdx!, 2, "内置规则必须排在所有用户规则之后")
+        XCTAssertGreaterThan(privateIdx!, 3, "内置规则必须排在所有用户规则之后")
     }
 
     /// global 模式维持现状：全局代理不吃分流规则（与主流客户端语义一致、行为可预期）。

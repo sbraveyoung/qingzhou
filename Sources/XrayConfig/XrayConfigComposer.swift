@@ -257,6 +257,17 @@ public enum XrayConfigComposer {
             ]
             // QUIC 阻断紧跟 DNS 之后、用户规则之前 —— 强制 UDP 443 回退 TCP，先于任何走代理规则。
             if blockQUIC { rules.append(quicRejectRule) }
+            // 公共 DNS 明文上游强制直连（东方甄选类 bug 的正修，真机+workaround 双实证）：
+            // dns 模块用明文上游（阿里 / 8.8.8.8 / 1.1.1.1）解析时会**发出新的 UDP:53 查询**，
+            // 这些查询经过路由；catch-all「tcp,udp→proxy」会把 8.8.8.8 这种非 CN 目标当海外流量
+            // 踹去代理节点 → 绕远（几百 ms/超时）+ 从海外出口查国内域名拿到错误边缘 IP。
+            // 在用户规则之前钉死这些 DNS 上游走 direct。DoH（dns 里的 `https+local://`）本就绕
+            // 路由直连、不受此规则影响；这条兜住 DoH 被干扰时回退的明文路径。见 docs/DNS.md。
+            rules.append([
+                "type": "field", "network": "udp", "port": 53,
+                "ip": ["8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "223.5.5.5", "223.6.6.6"],
+                "outboundTag": "direct"
+            ])
             // 用户规则（自定义 + 远程，自定义在前）优先于内置规则：xray 按序 first-match。
             rules += RoutingRuleConverter.xrayRules(from: userRules, hasFullGeoIP: hasFullGeoIP)
             rules += [
@@ -314,6 +325,13 @@ public enum XrayConfigComposer {
                         "port": 53,
                         "domains": ["geosite:cn"]
                     ] as [String: Any],
+                    // 海外 / 漏网（fakedns 接不住的 AAAA 等）查询优先走 DoH 直连：
+                    // `https+local://` = 加密（GFW 看不到查询内容、无法投毒）+ `+local` 绕过路由
+                    // 直接 Freedom 直连（不绕代理）。明文 8.8.8.8/1.1.1.1 作兜底（DoH 被干扰不通时），
+                    // 由 routing 的「公共 DNS → direct」规则保证它们也走直连、绝不绕代理（否则退回
+                    // 东方甄选那类「DNS 绕英国、慢/超时/拿错 IP」的 bug）。见 docs/DNS.md。
+                    "https+local://dns.google/dns-query",
+                    "https+local://cloudflare-dns.com/dns-query",
                     "8.8.8.8",
                     "1.1.1.1"
                 ],

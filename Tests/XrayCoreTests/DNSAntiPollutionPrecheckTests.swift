@@ -56,4 +56,23 @@ final class DNSAntiPollutionPrecheckTests: XCTestCase {
         XCTAssertTrue(config.contains("8.8.8.8"),
                       "公共 DNS 上游（8.8.8.8）应出现在配置里（DNS servers 兜底 + routing direct 规则）")
     }
+
+    /// 诊断：原样 dump rule 模式的完整 routing.rules（每条一行）+ dns 段，
+    /// 用事实核对 8.8.8.8 那条规则的位置/形式，而非靠猜。
+    func testDumpRuleModeRoutingAndDNS() throws {
+        let config = try ruleConfig()
+        let data = config.data(using: .utf8)!
+        let obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let routing = obj["routing"] as! [String: Any]
+        let rules = routing["rules"] as! [[String: Any]]
+        print("【domainStrategy】\(routing["domainStrategy"] ?? "nil")")
+        print("【routing.rules 共 \(rules.count) 条】")
+        for (i, r) in rules.enumerated() {
+            let d = try JSONSerialization.data(withJSONObject: r, options: [.sortedKeys])
+            print("  [\(i)] \(String(data: d, encoding: .utf8)!)")
+        }
+        let dns = obj["dns"] as! [String: Any]
+        let dnsData = try JSONSerialization.data(withJSONObject: dns, options: [.sortedKeys])
+        print("【dns】\(String(data: dnsData, encoding: .utf8)!)")
+    }
 }

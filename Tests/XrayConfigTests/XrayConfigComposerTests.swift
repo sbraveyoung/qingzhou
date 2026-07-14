@@ -128,15 +128,16 @@ final class XrayConfigComposerTests: XCTestCase {
         (r["outboundTag"] as? String) == "reject"
     }
 
-    /// rule 模式 blockQUIC=true：QUIC reject 必须紧跟在 DNS(udp 53→dns-out)之后（index 1），
-    /// 即在用户规则 / 内置 geosite/geoip 之前 —— first-match 下才能抢在「→proxy」前拒掉 UDP 443。
+    /// rule 模式 blockQUIC=true：rule 模式 [0]=DNS 模块上游 inboundTag→direct（真正正修）、
+    /// [1]=App DNS 劫持 dns-out，QUIC reject 紧跟其后（index 2），仍在用户规则 / 内置规则之前。
     func testBlockQUICRuleModeInsertsRejectRightAfterDNS() throws {
         let json = try parse(try XrayConfigComposer.compose(
             outboundsJSON: fakeTrojanOutbounds, mode: .rule, blockQUIC: true))
         let rules = (json["routing"] as! [String: Any])["rules"] as! [[String: Any]]
-        XCTAssertEqual(rules[0]["outboundTag"] as? String, "dns-out", "DNS 拦截仍须在最前")
-        XCTAssertTrue(isQUICReject(rules[1]),
-                      "QUIC reject 应紧跟 DNS 规则（index 1），实得 \(rules[1])")
+        XCTAssertEqual(rules[0]["inboundTag"] as? [String], ["dns-module"], "rule 模式最前是 DNS 上游直连")
+        XCTAssertEqual(rules[1]["outboundTag"] as? String, "dns-out", "App DNS 拦截在 inboundTag 规则之后")
+        XCTAssertTrue(isQUICReject(rules[2]),
+                      "QUIC reject 应紧跟 DNS 规则（index 2），实得 \(rules[2])")
     }
 
     /// global 模式 blockQUIC=true：同样紧跟 DNS 之后（index 1），抢在 catch-all「→proxy」之前。
@@ -233,8 +234,12 @@ final class XrayConfigComposerTests: XCTestCase {
             XCTAssertTrue(outs.contains { $0["tag"] as? String == "dns-out" && $0["protocol"] as? String == "dns" },
                           "\(mode) 缺 dns-out outbound")
             let rules = (json["routing"] as! [String: Any])["rules"] as! [[String: Any]]
-            XCTAssertEqual(rules.first?["port"] as? Int, 53, "\(mode) 第一条路由必须是 DNS 拦截")
-            XCTAssertEqual(rules.first?["outboundTag"] as? String, "dns-out")
+            // dns-out 劫持 App DNS 查询：rule 模式排在 [1]（[0] 是 DNS 上游 inboundTag→direct 正修），
+            // global/direct 模式仍在 [0]。验证它存在、按 port 53 劫持、且在最前区。
+            let dnsOutIdx = rules.firstIndex { ($0["outboundTag"] as? String) == "dns-out" }
+            XCTAssertNotNil(dnsOutIdx, "\(mode) 缺 dns-out 路由")
+            XCTAssertEqual(rules[dnsOutIdx!]["port"] as? Int, 53, "\(mode) dns-out 规则须按 port 53 劫持")
+            XCTAssertLessThanOrEqual(dnsOutIdx!, 1, "\(mode) dns-out 须在最前区（rule 模式 [1]、其余 [0]）")
         }
     }
 
@@ -269,22 +274,25 @@ final class XrayConfigComposerTests: XCTestCase {
             outboundsJSON: fakeTrojanOutbounds, mode: .rule, userRules: userRules, blockQUIC: false))
         let rules = (json["routing"] as! [String: Any])["rules"] as! [[String: Any]]
 
-        // 第一条仍是 DNS 拦截（fakedns 的命脉）
-        XCTAssertEqual(rules[0]["outboundTag"] as? String, "dns-out")
-        // 紧随其后是「公共 DNS 上游强制直连」内置基础设施规则（防 DNS 绕代理，docs/DNS.md）——
-        // 它先于用户规则（DNS 上游走对出站是分流的地基，不能被用户规则或 catch-all 抢走）。
-        XCTAssertEqual(rules[1]["outboundTag"] as? String, "direct")
-        XCTAssertTrue((rules[1]["ip"] as? [String])?.contains("8.8.8.8") ?? false,
-                      "index 1 应是公共 DNS 直连规则（含 8.8.8.8）")
+        // [0] DNS 模块上游查询 inboundTag → direct（东方甄选类 bug 真正正修，必须在最前，
+        // 先于 dns-out，否则 dns 上游查询撞 port:53→dns-out 循环、被踢去代理，见 docs/DNS.md）
+        XCTAssertEqual(rules[0]["inboundTag"] as? [String], ["dns-module"])
+        XCTAssertEqual(rules[0]["outboundTag"] as? String, "direct")
+        // [1] App 发来的 DNS 查询劫持到 fakedns（命脉）
+        XCTAssertEqual(rules[1]["outboundTag"] as? String, "dns-out")
+        // [2] 公共 DNS 目标 IP 直连（纯 ip 双保险，防漏网明文上游）
+        XCTAssertEqual(rules[2]["outboundTag"] as? String, "direct")
+        XCTAssertTrue((rules[2]["ip"] as? [String])?.contains("8.8.8.8") ?? false,
+                      "index 2 应是公共 DNS 目标 IP 直连规则（含 8.8.8.8）")
         // 再之后才是用户规则，保持传入顺序
-        XCTAssertEqual(rules[2]["domain"] as? [String], ["domain:example.com"])
-        XCTAssertEqual(rules[2]["outboundTag"] as? String, "reject")
-        XCTAssertEqual(rules[3]["ip"] as? [String], ["1.2.3.0/24"])
-        XCTAssertEqual(rules[3]["outboundTag"] as? String, "direct")
+        XCTAssertEqual(rules[3]["domain"] as? [String], ["domain:example.com"])
+        XCTAssertEqual(rules[3]["outboundTag"] as? String, "reject")
+        XCTAssertEqual(rules[4]["ip"] as? [String], ["1.2.3.0/24"])
+        XCTAssertEqual(rules[4]["outboundTag"] as? String, "direct")
         // 内置规则在用户规则之后
         let privateIdx = rules.firstIndex { ($0["ip"] as? [String])?.contains("geoip:private") ?? false }
         XCTAssertNotNil(privateIdx)
-        XCTAssertGreaterThan(privateIdx!, 3, "内置规则必须排在所有用户规则之后")
+        XCTAssertGreaterThan(privateIdx!, 4, "内置规则必须排在所有用户规则之后")
     }
 
     /// global 模式维持现状：全局代理不吃分流规则（与主流客户端语义一致、行为可预期）。

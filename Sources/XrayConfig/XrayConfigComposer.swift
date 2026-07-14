@@ -251,8 +251,17 @@ public enum XrayConfigComposer {
             ]
         case .rule:
             var rules: [[String: Any]] = [
-                // DNS 查询 → dns-out（fakedns 处理），必须在最前 —— 用户规则也不能插到它前面，
-                // 否则 DOMAIN 类规则命中 DNS 包本身，fakedns 永远不触发、按域名路由全失效。
+                // ⭐ DNS 模块自己发出的上游查询强制直连（东方甄选类 bug 的**真正正修**，
+                // 2026-07-14 从实际配置 dump 定位、xray 维护者 #6151 亲证的机制）：
+                // dns 段打了 `"tag": "dns-module"`，这条按 inboundTag 把 dns 模块发出的所有查询
+                // （阿里 / 8.8.8.8 / 1.1.1.1 明文上游）**在最前面**捞出来走 direct。
+                // 为什么必须在 dns-out 之前、且必须用 inboundTag：dns 上游查询也是 udp:53，若先撞上
+                // 下面的 `port:53→dns-out` 会重入 dns 模块造成循环、被 xray 踢去默认代理 —— 这就是
+                // build 16~18 用 ip/port 规则（在 dns-out 之后）怎么都拦不住 8.8.8.8 的真因。
+                // DoH（dns 里 `https+local://`）本就绕路由直连、不经此路。见 docs/DNS.md。
+                ["type": "field", "inboundTag": ["dns-module"], "outboundTag": "direct"],
+                // DNS 查询 → dns-out（fakedns 处理）—— 这拦的是 **App 发来的** DNS 查询
+                // （inboundTag=tun-in，不匹配上面的 dns-module），劫持到 fakedns。
                 ["type": "field", "port": 53, "network": "udp", "outboundTag": "dns-out"]
             ]
             // QUIC 阻断紧跟 DNS 之后、用户规则之前 —— 强制 UDP 443 回退 TCP，先于任何走代理规则。
@@ -315,6 +324,10 @@ public enum XrayConfigComposer {
                 "queryStrategy": "UseIPv4"
             ]
         case .rule:
+            // `tag`：给 dns 模块发出的**上游查询**打标，routing 里用 inboundTag=dns-module
+            // 把它们全部导向 direct（不绕代理）—— 治东方甄选类「DNS 上游被踹去代理」的真正正修。
+            // 见 buildRouting rule 的第一条规则 + docs/DNS.md。
+            //
             // 中国域名（geosite:cn）走阿里 DNS，从国内直连查、拿国内边缘 IP；其余用
             // Google + Cloudflare。
             //
@@ -327,6 +340,8 @@ public enum XrayConfigComposer {
             // 边缘 → 被风控 / 超时。表现为「连接页全 DIRECT、加直连规则和完整版 geo 都无效、
             // 一切直连正常」的跨域错误（真机 cctv 案定位）。去掉过滤，阿里给什么用什么。
             return [
+                // dns 模块发出的上游查询打这个 tag，routing 首条 inboundTag=dns-module → direct。
+                "tag": "dns-module",
                 "servers": [
                     "fakedns",
                     [

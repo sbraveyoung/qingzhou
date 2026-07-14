@@ -277,6 +277,11 @@ public enum XrayConfigComposer {
                 ["type": "field", "ip": ["geoip:cn"], "outboundTag": "direct"],
                 // 中国域名直连
                 ["type": "field", "domain": ["geosite:cn"], "outboundTag": "direct"],
+                // Apple 域名直连：App Store / 账号 / iCloud / Game Center 等在国内有 CDN，
+                // 走代理反而慢/被限（真机：profile.gc.apple.com 走日本节点 → App Store 打不开）。
+                // 内置 geosite.dat 有 APPLE 分类。放在 category-ads-all 之前 —— apple 优先直连，
+                // 不让个别 apple 遥测子域被广告规则误拒。
+                ["type": "field", "domain": ["geosite:apple"], "outboundTag": "direct"],
                 // 广告 / 隐私 / 恶意域名拒绝（geosite 自带分类）
                 ["type": "field", "domain": ["geosite:category-ads-all"], "outboundTag": "reject"],
                 // 其余走代理；用户写了 FINAL 规则时用它的出口覆盖（FINAL = 兜底，不是普通规则）
